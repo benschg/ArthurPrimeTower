@@ -37,6 +37,31 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
 - **Photos** (`public/photos/`, `src/data/photos.ts`): 17 freely licensed images from Wikimedia Commons with
   attribution, downloaded and resized by `scripts/fetch-photos.mjs`.
 
+## Code layout
+
+```
+src/components/tower/
+  TowerViewer.tsx        client wrapper: state, HUD, mode buttons, floor card
+  viewer/                HUD pieces (Celebration, FloorPlanLink)
+  TowerScene.tsx         the Canvas; re-exports the viewer state types
+  scene/                 one module per subsystem of the 3D scene
+    Scene.tsx            composition, explode/pull-out choreography, camera binding
+    glass.tsx            per-floor glass rings with the facade shader, roof group
+    floors.tsx           floor plates (hover/click/pull-out), structure, labels
+    roof.tsx             parapet, plant room, mast, aviation lights
+    maintenance.tsx      cradle, dirt layer and the window-cleaning game
+    entrances.tsx        doors and canopy on the ground floor
+    site.tsx / garage.tsx neighbours, bridge, railway; two-level garage and peek target
+    camera.tsx / blender.tsx  mode transitions; day/night and garage fades
+    hdri.ts / textures.ts / helpers.ts / types.ts
+  geometry/              measured geometry: footprint & stages, structure (cores, columns,
+                         drawing frame), site (OSM footprints, garage, parking)
+  interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions
+  Interiors.tsx          instanced rendering of the fit-out, lift cables and cars
+  facadeShader.ts        GLSL facade material
+src/i18n/ui/             en.ts, de.ts and the ui index
+```
+
 ## Run
 
 ```bash

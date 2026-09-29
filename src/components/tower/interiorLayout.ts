@@ -43,16 +43,19 @@ export const KINDS = [
   "liftCable",
   "liftCar",
 ] as const;
+
 export type Kind = (typeof KINDS)[number];
 
 export const INTERIOR_HEIGHT = 2.7; // clear height under the slab
+
 export const INTERIOR_BASE = 0.56; // top of the thin floor plate in the exploded view
 
 const OFFICE_DEPTH = 5.2;
+
 const CELL = 4.7;
 
 /** Rotation about Y so a box's local x runs along direction (dE, dN). */
-const rotFor = (dE: number, dN: number) => Math.atan2(dN, dE);
+export const rotFor = (dE: number, dN: number) => Math.atan2(dN, dE);
 
 function makeStore(): Record<Kind, Inst[]> {
   const o = {} as Record<Kind, Inst[]>;
@@ -61,6 +64,7 @@ function makeStore(): Record<Kind, Inst[]> {
 }
 
 const coreBoxes = coreBoxesDrawing();
+
 function inCore(e: number, n: number, margin = 0.8): boolean {
   const [x, y] = worldToDrawing([e, n]);
   return coreBoxes.some(([x0, y0, x1, y1]) => x >= x0 - margin && x <= x1 + margin && y >= y0 - margin && y <= y1 + margin);
@@ -270,26 +274,4 @@ export function buildInteriors(): Record<Kind, Inst[]> {
     }
   }
   return out;
-}
-
-export type Entrance = { e: number; n: number; rot: number; width: number; name: string };
-
-/**
- * Building entrances on the ground floor: the main entrance in the recessed porch on the
- * south-east (Hardbruecke / Cubus) face near the east corner, the bank branch further along
- * the same face, and the Clouds entrance on the plaza (south-west) face at Maagplatz.
- */
-export function entrances(): Entrance[] {
-  const poly = stageForFloor(0).polygon;
-  const along = (i: number): [Pt, Pt, Pt] => {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    return [a, b, [(b[0] - a[0]) / L, (b[1] - a[1]) / L]];
-  };
-  const on = (i: number, t: number, width: number, name: string): Entrance => {
-    const [a, b, dir] = along(i);
-    return { e: a[0] + (b[0] - a[0]) * t, n: a[1] + (b[1] - a[1]) * t, rot: rotFor(dir[0], dir[1]), width, name };
-  };
-  return [on(3, 0.74, 4.6, "main"), on(3, 0.36, 3.0, "bank"), on(6, 0.42, 3.4, "clouds")];
 }
