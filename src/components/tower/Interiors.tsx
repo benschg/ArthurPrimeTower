@@ -6,6 +6,8 @@ import * as THREE from "three";
 import { floorElevation, FLOORS, TOWER_HEIGHT } from "./geometry";
 import { buildInteriors, INTERIOR_BASE, INTERIOR_HEIGHT, KINDS, type Inst, type Kind } from "./interiorLayout";
 
+const ONE = new THREE.Vector3(1, 1, 1);
+
 type Look = { color: string; roughness?: number; metalness?: number; emissive?: string; cylinder?: boolean; opacity?: number };
 
 const LOOK: Record<Kind, Look> = {
@@ -29,8 +31,13 @@ const LOOK: Record<Kind, Look> = {
   liftCar: { color: "#f3c34a", roughness: 0.5, metalness: 0.2, emissive: "#8a6a10" },
 };
 
-export type ExtractState = { floor: number; t: number; dx: number; dz: number };
-export const EXTRACT_DISTANCE = 78;
+/**
+ * Pull-out state. `open` lifts everything above the floor; `t` blends the plate from its
+ * slot to `pos`/`quat`, a transform kept relative to the camera by the Scene each frame.
+ */
+export type ExtractState = { floor: number; t: number; open: number; shift: number; pos: THREE.Vector3; quat: THREE.Quaternion };
+export const OPEN_GAP = 9;
+export const PLATE_LIFT = 0.2; // plate meshes sit this far above the floor elevation
 
 /**
  * Instanced interiors. One InstancedMesh per kind covers all 36 floors. In the exploded
@@ -65,56 +72,81 @@ export function Interiors({
     return r;
   }, [data]);
   const refs = useRef<Partial<Record<Kind, THREE.InstancedMesh>>>({});
-  const applied = useRef({ gap: -1, t: -1, floor: -2 });
+  const applied = useRef({ gap: -1, open: -1, floor: -2 });
   const dummy = useRef(new THREE.Object3D());
+  const plate = useRef(new THREE.Matrix4());
+  const local = useRef(new THREE.Matrix4());
+  const world = useRef(new THREE.Matrix4());
   const box = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const cyl = useMemo(() => new THREE.CylinderGeometry(0.5, 0.5, 1, 14), []);
 
   useFrame(() => {
     const gap = explodeRef.current?.gap ?? 0;
-    const ex = extractRef.current ?? { floor: -1, t: 0, dx: 1, dz: 0 };
+    const ex = extractRef.current;
     const a = applied.current;
     const exploded = gap > 0.001;
-    if (Math.abs(gap - a.gap) > 0.0005 || Math.abs(ex.t - a.t) > 0.0005 || ex.floor !== a.floor) {
+    const exFloor = ex?.floor ?? -1;
+    const open = ex?.open ?? 0;
+    const stackTop = TOWER_HEIGHT + (FLOORS - 1) * gap + (exFloor >= 0 ? OPEN_GAP * open : 0);
+
+    // Whole stack (exploded view): recompose only when the gap, the opening or the floor changes.
+    if (Math.abs(gap - a.gap) > 0.0005 || Math.abs(open - a.open) > 0.0005 || exFloor !== a.floor) {
       const d = dummy.current;
-      const offX = ex.dx * EXTRACT_DISTANCE * ex.t;
-      const offZ = ex.dz * EXTRACT_DISTANCE * ex.t;
-      const stackTop = TOWER_HEIGHT + (FLOORS - 1) * gap;
       for (const k of KINDS) {
         const mesh = refs.current[k];
         if (!mesh) continue;
         const list: Inst[] = data[k];
         let n = 0;
-        const place = (it: Inst) => {
-          const pulled = it.f === ex.floor;
-          d.position.set(
-            it.e + (pulled ? offX : 0),
-            floorElevation(it.f) + INTERIOR_BASE + it.f * gap + it.y,
-            -it.n + (pulled ? offZ : 0),
-          );
-          d.rotation.set(0, it.rot, 0);
-          d.scale.set(it.sx, it.sy, it.sz);
-          if (k === "liftCable") {
-            const h = stackTop + INTERIOR_HEIGHT;
-            d.position.y = h / 2;
-            d.scale.y = h;
-          }
-          d.updateMatrix();
-          mesh.setMatrixAt(n++, d.matrix);
-        };
         if (exploded) {
-          for (let i = 0; i < list.length; i++) place(list[i]);
-        } else if (ex.floor >= 0 && k !== "liftCable") {
-          const [s0, s1] = ranges[k][ex.floor];
-          for (let i = s0; i < s1; i++) place(list[i]);
+          for (let i = 0; i < list.length; i++) {
+            const it = list[i];
+            const lift = exFloor >= 0 && it.f > exFloor ? OPEN_GAP * open : 0;
+            d.position.set(it.e, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + lift + it.y, -it.n);
+            d.rotation.set(0, it.rot, 0);
+            d.scale.set(it.sx, it.sy, it.sz);
+            if (k === "liftCable") {
+              const h = stackTop + INTERIOR_HEIGHT;
+              d.position.y = h / 2;
+              d.scale.y = h;
+            }
+            d.updateMatrix();
+            mesh.setMatrixAt(n++, d.matrix);
+          }
         }
         mesh.count = n;
         mesh.instanceMatrix.needsUpdate = true;
       }
       a.gap = gap;
-      a.t = ex.t;
-      a.floor = ex.floor;
+      a.open = open;
+      a.floor = exFloor;
     }
+
+    // The pulled-out floor follows its camera-bound transform every frame.
+    if (ex && exFloor >= 0) {
+      plate.current.compose(ex.pos, ex.quat, ONE);
+      const d = dummy.current;
+      for (const k of KINDS) {
+        if (k === "liftCable" || k === "liftCar") continue;
+        const mesh = refs.current[k];
+        if (!mesh) continue;
+        const list: Inst[] = data[k];
+        const [s0, s1] = ranges[k][exFloor];
+        const base = exploded ? s0 : 0;
+        for (let i = s0; i < s1; i++) {
+          const it = list[i];
+          d.position.set(it.e, INTERIOR_BASE - PLATE_LIFT + it.y, -it.n);
+          d.rotation.set(0, it.rot, 0);
+          d.scale.set(it.sx, it.sy, it.sz);
+          d.updateMatrix();
+          local.current.copy(d.matrix);
+          world.current.multiplyMatrices(plate.current, local.current);
+          mesh.setMatrixAt(base + (i - s0), world.current);
+        }
+        if (!exploded) mesh.count = s1 - s0;
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+
     // lift cars travel their shafts (exploded view only)
     const cars = refs.current.liftCar;
     if (cars && exploded) {
@@ -129,7 +161,8 @@ export function Interiors({
         const lo = Math.floor(fl);
         const frac = fl - lo;
         const elev = THREE.MathUtils.lerp(floorElevation(lo), floorElevation(Math.min(FLOORS - 1, lo + 1)), frac);
-        d.position.set(it.e, elev + INTERIOR_BASE + fl * gap + it.y, -it.n);
+        const lift = exFloor >= 0 && fl > exFloor ? OPEN_GAP * open : 0;
+        d.position.set(it.e, elev + INTERIOR_BASE + fl * gap + lift + it.y, -it.n);
         d.rotation.set(0, it.rot, 0);
         d.scale.set(it.sx, it.sy, it.sz);
         d.updateMatrix();
@@ -140,7 +173,7 @@ export function Interiors({
     } else if (cars && !exploded) {
       cars.count = 0;
     }
-    const op = exploded ? Math.min(1, gap / 0.9) : ex.t;
+    const op = exploded ? Math.min(1, gap / 0.9) : (ex?.t ?? 0);
     for (const k of KINDS) {
       const m = refs.current[k]?.material as THREE.MeshStandardMaterial | undefined;
       if (m) m.opacity = (LOOK[k].opacity ?? 1) * op;

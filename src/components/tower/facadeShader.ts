@@ -91,6 +91,9 @@ void main() {
   vec3 roof = mix(vec3(0.10, 0.11, 0.12), vec3(0.17, 0.18, 0.19), grain) * (0.75 + 0.25 * max(dot(N, uSunDir), 0.0));
   roof = mix(roof, roof * 0.35, uNight) + env * 0.04;
   color = mix(color, roof, up);
+  // Undersides (exposed when floors separate): a dark soffit, not glass.
+  float down = smoothstep(0.55, 0.85, -N.y);
+  color = mix(color, vec3(0.08, 0.09, 0.11) + env * 0.03, down);
 
   gl_FragColor = vec4(color, uOpacity);
 
