@@ -56,6 +56,9 @@ export function TowerViewer() {
   return (
     <div className="relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink">
       <TowerScene {...state} onHover={onHover} onSelect={onSelect} />
+      {/* Legibility gradients over the HDRI sky */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-b from-ink/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[46vw] max-w-md bg-gradient-to-r from-ink/70 to-transparent" />
 
       {/* Top-left title */}
       <div className="absolute left-4 top-4 sm:left-8 sm:top-8 pointer-events-none max-w-[60vw]">

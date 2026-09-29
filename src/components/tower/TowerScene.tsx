@@ -1,9 +1,12 @@
 "use client";
 
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Grid, Html, Lightformer, OrbitControls } from "@react-three/drei";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { Environment, Grid, Html, OrbitControls } from "@react-three/drei";
+import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { envMaxLod, facadeMaterialParams, prepareEnvTexture, type FacadeMaterial } from "./facadeShader";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { floorBands } from "@/data/tower";
 import {
   BASEMENT_HEIGHT,
@@ -89,45 +92,61 @@ const WorldUV: THREE.ExtrudeGeometryOptions["UVGenerator"] = {
   },
 };
 
-/** Procedural facade texture: slab band per floor, mullions every 1.5 m, "pixelated" open windows. */
-function useFacadeTexture(night: boolean) {
+/**
+ * Procedural facade textures: a base colour map (slab band per floor, mullions every 1.5 m,
+ * "pixelated" open-window slits) and a mask of windows that glow at night.
+ */
+function useFacadeTextures() {
   return useMemo(() => {
     const cellsX = 16; // 1.5 m panes → 24 m
     const cellsY = 6; // 3.35 m floors → 20.1 m
     const px = 64;
-    const c = document.createElement("canvas");
-    c.width = cellsX * px;
-    c.height = cellsY * px;
-    const ctx = c.getContext("2d")!;
-    const glass = night ? "#0d2624" : "#2f7f78";
-    const glassLight = night ? "#143d39" : "#3d968d";
-    const lit = "#ffe2a0";
-    const mullion = night ? "#091211" : "#1b3d3a";
-    ctx.fillStyle = glass;
-    ctx.fillRect(0, 0, c.width, c.height);
+    const make = () => {
+      const c = document.createElement("canvas");
+      c.width = cellsX * px;
+      c.height = cellsY * px;
+      return [c, c.getContext("2d")!] as const;
+    };
+    const [cBase, base] = make();
+    const [cLit, lit] = make();
+    base.fillStyle = "#2f7f78";
+    base.fillRect(0, 0, cBase.width, cBase.height);
+    lit.fillStyle = "#000";
+    lit.fillRect(0, 0, cLit.width, cLit.height);
     for (let j = 0; j < cellsY; j++) {
       for (let i = 0; i < cellsX; i++) {
         const x = i * px;
         const y = j * px;
         const r = hash(i, j);
-        ctx.fillStyle = night ? (r < 0.45 ? lit : r < 0.6 ? glassLight : glass) : r < 0.16 ? glassLight : glass;
-        ctx.fillRect(x, y + px * 0.14, px, px * 0.86);
-        ctx.fillStyle = mullion;
-        ctx.fillRect(x, y, px, px * 0.14); // slab band
-        ctx.fillRect(x, y, px * 0.05, px); // mullion
+        base.fillStyle = r < 0.16 ? "#3d968d" : "#2f7f78";
+        base.fillRect(x, y + px * 0.14, px, px * 0.86);
+        base.fillStyle = "#1b3d3a";
+        base.fillRect(x, y, px, px * 0.14); // slab band
+        base.fillRect(x, y, px * 0.05, px); // mullion
         if (r > 0.7) {
-          ctx.fillStyle = night ? "#020505" : "#0e2624";
-          ctx.fillRect(x + px * 0.95, y + px * 0.14, px * 0.05, px * 0.86); // opening slit
+          base.fillStyle = "#0e2624";
+          base.fillRect(x + px * 0.95, y + px * 0.14, px * 0.05, px * 0.86); // opening slit
+        }
+        const g = hash(j * 3 + 1, i * 7 + 2);
+        if (g < 0.34) {
+          lit.fillStyle = g < 0.08 ? "#ffffff" : "#8f8f8f";
+          lit.fillRect(x + px * 0.08, y + px * 0.2, px * 0.84, px * 0.74);
         }
       }
     }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-    tex.repeat.set(1 / (cellsX * 1.5), 1 / (cellsY * TYP_HEIGHT));
-    return tex;
-  }, [night]);
+    const setup = (c: HTMLCanvasElement, srgb: boolean) => {
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    };
+    return {
+      map: setup(cBase, true),
+      lit: setup(cLit, false),
+      repeat: new THREE.Vector2(1 / (cellsX * 1.5), 1 / (cellsY * TYP_HEIGHT)),
+    };
+  }, []);
 }
 
 /** Deterministic pseudo-random value in [0, 1) for a texture cell. */
@@ -144,33 +163,63 @@ function bandForFloor(floor: number) {
 /* Tower                                                               */
 /* ------------------------------------------------------------------ */
 
-function GlassStages({ night, dim }: { night: boolean; dim: boolean }) {
-  const tex = useFacadeTexture(night);
-  const geos = useMemo(
-    () => stages.map((s) => extrudeUp(s.polygon, floorElevation(s.to) + floorHeight(s.to) - floorElevation(s.from))),
-    [],
-  );
+const HDRI = {
+  day: "/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+  night: "/hdri/shanghai_bund_1k.hdr",
+};
+
+/** Loads both HDRIs once and returns the one for the current mode, prepared for direct sampling. */
+function useHdri(night: boolean) {
+  const [day, nite] = useLoader(RGBELoader, [HDRI.day, HDRI.night]);
+  const prepared = useMemo(() => [prepareEnvTexture(day), prepareEnvTexture(nite)], [day, nite]);
+  return night ? prepared[1] : prepared[0];
+}
+
+function GlassStages({ night, dim, env }: { night: boolean; dim: boolean; env: THREE.Texture }) {
+  const { map, lit, repeat } = useFacadeTextures();
+  const params = useMemo(() => facadeMaterialParams(), []);
+  const matRef = useRef<FacadeMaterial>(null);
+  // All stages merged into one geometry so the whole skin shares one material and draw call.
+  const geometry = useMemo(() => {
+    const parts = stages.map((s) => {
+      const g = extrudeUp(s.polygon, floorElevation(s.to) + floorHeight(s.to) - floorElevation(s.from));
+      g.translate(0, floorElevation(s.from), 0);
+      return g;
+    });
+    return mergeGeometries(parts, false)!;
+  }, []);
+
+  useEffect(() => {
+    const m = matRef.current;
+    if (!m) return;
+    m.uniforms.uMap.value = map;
+    m.uniforms.uLit.value = lit;
+    m.uniforms.uRepeat.value.copy(repeat);
+  }, [map, lit, repeat]);
+
+  useEffect(() => {
+    const m = matRef.current;
+    if (!m) return;
+    m.uniforms.uEnv.value = env;
+    m.uniforms.uEnvMaxLod.value = envMaxLod(env);
+  }, [env]);
+
+  useFrame((_, dt) => {
+    const m = matRef.current;
+    if (!m) return;
+    const u = m.uniforms;
+    u.uNight.value = THREE.MathUtils.damp(u.uNight.value, night ? 1 : 0, 3, dt);
+    u.uOpacity.value = THREE.MathUtils.damp(u.uOpacity.value, dim ? 0.14 : 1, 6, dt);
+    u.uEnvIntensity.value = THREE.MathUtils.damp(u.uEnvIntensity.value, night ? 1.1 : 1, 3, dt);
+    u.uReflectivity.value = THREE.MathUtils.damp(u.uReflectivity.value, night ? 1.8 : 1.3, 3, dt);
+    m.depthWrite = !dim;
+  });
+
   return (
     <group>
-      {stages.map((s, i) => (
-        <mesh key={i} geometry={geos[i]} position={[0, floorElevation(s.from), 0]} castShadow receiveShadow>
-          <meshPhysicalMaterial
-            map={tex}
-            color={night ? "#8fb8b0" : "#c4ebe2"}
-            metalness={0.3}
-            roughness={0.16}
-            clearcoat={1}
-            clearcoatRoughness={0.08}
-            envMapIntensity={night ? 0.5 : 1.3}
-            transparent
-            opacity={dim ? 0.14 : 1}
-            emissive={night ? "#3a3220" : "#000000"}
-            emissiveMap={night ? tex : undefined}
-            emissiveIntensity={night ? 1 : 0}
-            depthWrite={!dim}
-          />
-        </mesh>
-      ))}
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <shaderMaterial ref={matRef} args={[params]} />
+      </mesh>
       {/* Roof plant enclosure and mast */}
       <mesh position={[0, TOWER_HEIGHT + 1.4, 0]} rotation={[0, DRAWING_ROT_Y, 0]} castShadow>
         <boxGeometry args={[22, 2.8, 12]} />
@@ -551,10 +600,10 @@ function Scene(props: SceneProps) {
   const labelFloor = selected ?? hovered;
   const dim = showTenants || explode;
   const controlsRef = useRef<ControlsLike | null>(null);
+  const env = useHdri(night);
   return (
     <>
-      <color attach="background" args={[night ? "#04070b" : "#0b0f14"]} />
-      <fog attach="fog" args={[night ? "#04070b" : "#0b0f14", 300, 900]} />
+      <fog attach="fog" args={[night ? "#070a10" : "#1a2230", 420, 1100]} />
 
       <ambientLight intensity={night ? 0.22 : 0.5} />
       <directionalLight
@@ -573,15 +622,16 @@ function Scene(props: SceneProps) {
       />
       <directionalLight position={[160, 90, -140]} intensity={night ? 0.2 : 0.6} color="#8fc9ff" />
 
-      <Environment resolution={256} frames={1}>
-        <Lightformer intensity={night ? 0.5 : 3} rotation-x={Math.PI / 2} position={[0, 80, 0]} scale={[160, 160, 1]} color="#dfe9ff" />
-        <Lightformer intensity={night ? 0.3 : 1.6} rotation-y={Math.PI / 2} position={[-100, 30, 0]} scale={[80, 50, 1]} color="#ffe9c9" />
-        <Lightformer intensity={night ? 0.3 : 1.2} rotation-y={-Math.PI / 2} position={[100, 30, 0]} scale={[80, 50, 1]} color="#bcd8ff" />
-        <Lightformer intensity={night ? 0.9 : 0.4} form="ring" position={[0, -20, 0]} scale={100} color={night ? "#ffb36b" : "#3b4a5c"} />
-      </Environment>
+      <Environment
+        map={env}
+        background
+        backgroundBlurriness={night ? 0.08 : 0.02}
+        backgroundIntensity={night ? 0.22 : 0.55}
+        environmentIntensity={night ? 0.5 : 0.8}
+      />
 
       <group>
-        <GlassStages night={night} dim={dim} />
+        <GlassStages night={night} dim={dim} env={env} />
         <Structure visible={dim} />
         <FloorSlices showTenants={showTenants} explode={explode} hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
         {labelFloor !== null && <FloorLabel floor={labelFloor} explode={explode} />}
@@ -620,7 +670,9 @@ export default function TowerScene(props: SceneProps) {
       onPointerMissed={() => props.onSelect(null)}
       className="!absolute inset-0"
     >
-      <Scene {...props} />
+      <Suspense fallback={null}>
+        <Scene {...props} />
+      </Suspense>
     </Canvas>
   );
 }

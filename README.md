@@ -10,6 +10,11 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   ramp from OpenStreetMap. Modes: tenants, explode, garage, night, auto-rotate. Hover or click a floor for details.
 - **Data** (`src/data/tower.ts`): facts, timeline, architecture notes, garage, annexes, tenants with floors, floor
   bands for the model, links to the published floor plans and sections, and all sources.
+- **Facade shader** (`src/components/tower/facadeShader.ts`): a GLSL3 ShaderMaterial that samples an equirectangular
+  HDRI directly (mip-blurred by roughness, Schlick Fresnel so the glass turns from emerald to mirror at grazing angles),
+  with a night mask that lights individual windows. Day uses a partly cloudy sky, night a city waterfront so the lights
+  reflect in the glass. HDRIs in `public/hdri/` are CC0 from [Poly Haven](https://polyhaven.com/)
+  (`kloofendal_48d_partly_cloudy_puresky`, `shanghai_bund`).
 - **Photos** (`public/photos/`, `src/data/photos.ts`): 17 freely licensed images from Wikimedia Commons with
   attribution, downloaded and resized by `scripts/fetch-photos.mjs`.
 
