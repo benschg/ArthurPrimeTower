@@ -2,7 +2,7 @@
 export const en = {
   metaTitle: "Prime Tower Zürich",
   metaDescription: "An interactive 3D showcase of the Prime Tower in Zürich-West: facts, floors, tenants, garage and photos.",
-  nav: { facts: "Facts", architecture: "Architecture", plans: "Plans", tenants: "Tenants", garage: "Garage", site: "Site", gallery: "Photos", sources: "Sources" },
+  nav: { facts: "Facts", architecture: "Architecture", plans: "Plans", tenants: "Tenants", garage: "Garage", site: "Site", gallery: "Photos", talk: "Talk", sources: "Sources" },
   langSwitch: "Deutsch",
 
   viewer: {
@@ -110,6 +110,19 @@ export const en = {
       prev: "← prev",
       next: "next →",
       close: "close ✕",
+    },
+    talk: {
+      eyebrow: "School talk",
+      title: "The presentation",
+      intro: "A 16-slide deck for the school talk: the key facts, the history, the architecture and the tenants, illustrated with the photos from this site.",
+      cta: "Open the presentation",
+      detail: "16 slides in German and English with speaker notes · arrow keys to navigate, F for fullscreen",
+      back: "Back to the site",
+      help: "← → change slide · F fullscreen · N speaker notes",
+      prev: "Previous slide",
+      next: "Next slide",
+      notes: "Notes",
+      fullscreen: "Fullscreen",
     },
     sources: {
       eyebrow: "Sources",

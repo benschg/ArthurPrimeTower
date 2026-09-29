@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { tenantAssetBySlug } from "@/data/tenantAssets";
 import { categoryLabel, profilesOnFloor } from "@/data/tenantProfiles";
+import { presentationPath } from "@/data/presentation";
 import { floorBands } from "@/data/tower";
 import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
@@ -130,6 +131,12 @@ export function TowerViewer() {
           Tower
         </h1>
         <p className="mt-3 text-sm text-muted max-w-xs hidden sm:block">{t.tagline}</p>
+        <Link
+          href={presentationPath}
+          className="pointer-events-auto mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-ink/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent hover:bg-accent/15 hover:border-accent transition-colors"
+        >
+          {ui[lang].sections.talk.cta} →
+        </Link>
       </div>
 
       {/* Controls */}

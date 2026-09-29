@@ -8,12 +8,13 @@ import { Section } from "@/components/Section";
 import { TenantList } from "@/components/TenantList";
 import { TowerViewer } from "@/components/tower/TowerViewer";
 import { photos } from "@/data/photos";
+import { presentationPath } from "@/data/presentation";
 import { annexes, architecture, facts, garage, heroFacts, location, plans, sources, timeline } from "@/data/tower";
 import { l, pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 
-const navIds = ["facts", "architecture", "plans", "tenants", "garage", "site", "gallery", "sources"] as const;
+const navIds = ["facts", "architecture", "plans", "tenants", "garage", "site", "gallery", "talk", "sources"] as const;
 
 export default function Home() {
   const { lang } = useLang();
@@ -141,6 +142,19 @@ export default function Home() {
 
       <Section id="gallery" eyebrow={s.gallery.eyebrow} title={s.gallery.title} intro={s.gallery.intro}>
         <Gallery photos={photos} lang={lang} />
+      </Section>
+
+      <Section id="talk" eyebrow={s.talk.eyebrow} title={s.talk.title} intro={s.talk.intro}>
+        <Link
+          href={presentationPath}
+          className="group flex items-center justify-between gap-4 rounded-2xl border border-accent/40 bg-accent/5 px-5 py-4 hover:border-accent hover:bg-accent/10 transition-colors"
+        >
+          <span>
+            <span className="block font-semibold group-hover:text-accent">{s.talk.cta}</span>
+            <span className="block text-sm text-muted">{s.talk.detail}</span>
+          </span>
+          <span className="font-mono text-accent text-lg">→</span>
+        </Link>
       </Section>
 
       <Section id="sources" eyebrow={s.sources.eyebrow} title={s.sources.title}>
