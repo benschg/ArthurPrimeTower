@@ -76,5 +76,11 @@ await wait(3200);
 await page.screenshot({ path: path.join(out, "pullout.png") });
 await wait(5000);
 await page.screenshot({ path: path.join(out, "pullout-later.png") });
+// select another floor: the current one goes back in, then the new one comes out
+await page.mouse.click(470, 250);
+await wait(900);
+await page.screenshot({ path: path.join(out, "switch-retracting.png") });
+await wait(4200);
+await page.screenshot({ path: path.join(out, "switch-done.png") });
 await browser.close();
 console.log(errors.length ? errors.join("\n") : "No page errors.");

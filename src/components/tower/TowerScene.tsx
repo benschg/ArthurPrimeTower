@@ -5,7 +5,7 @@ import { Environment, Grid, Html, OrbitControls } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
-import { envMaxLod, facadeMaterialParams, prepareEnvTexture, type FacadeMaterial } from "./facadeShader";
+import { createFacadeMaterial, createGlassEnv, type FacadeMaterial } from "./facadeShader";
 import { Interiors, OPEN_GAP, PLATE_LIFT, type ExtractState } from "./Interiors";
 import { entrances } from "./interiorLayout";
 import { floorBands } from "@/data/tower";
@@ -33,7 +33,6 @@ import {
   stages,
   stationPlatform,
   TOWER_HEIGHT,
-  TYP_HEIGHT,
   type Pt,
 } from "./geometry";
 
@@ -101,63 +100,6 @@ const WorldUV: THREE.ExtrudeGeometryOptions["UVGenerator"] = {
   },
 };
 
-/**
- * Procedural facade textures: a base colour map (slab band per floor, mullions every 1.5 m,
- * "pixelated" open-window slits) and a mask of windows that glow at night.
- */
-function useFacadeTextures() {
-  return useMemo(() => {
-    const cellsX = 16; // 1.5 m panes → 24 m
-    const cellsY = 6; // 3.35 m floors → 20.1 m
-    const px = 64;
-    const make = () => {
-      const c = document.createElement("canvas");
-      c.width = cellsX * px;
-      c.height = cellsY * px;
-      return [c, c.getContext("2d")!] as const;
-    };
-    const [cBase, base] = make();
-    const [cLit, lit] = make();
-    base.fillStyle = "#2f7f78";
-    base.fillRect(0, 0, cBase.width, cBase.height);
-    lit.fillStyle = "#000";
-    lit.fillRect(0, 0, cLit.width, cLit.height);
-    for (let j = 0; j < cellsY; j++) {
-      for (let i = 0; i < cellsX; i++) {
-        const x = i * px;
-        const y = j * px;
-        const r = hash(i, j);
-        base.fillStyle = r < 0.16 ? "#3d968d" : "#2f7f78";
-        base.fillRect(x, y + px * 0.14, px, px * 0.86);
-        base.fillStyle = "#1b3d3a";
-        base.fillRect(x, y, px, px * 0.14); // slab band
-        base.fillRect(x, y, px * 0.05, px); // mullion
-        if (r > 0.7) {
-          base.fillStyle = "#0e2624";
-          base.fillRect(x + px * 0.95, y + px * 0.14, px * 0.05, px * 0.86); // opening slit
-        }
-        const g = hash(j * 3 + 1, i * 7 + 2);
-        if (g < 0.34) {
-          lit.fillStyle = g < 0.08 ? "#ffffff" : "#8f8f8f";
-          lit.fillRect(x + px * 0.08, y + px * 0.2, px * 0.84, px * 0.74);
-        }
-      }
-    }
-    const setup = (c: HTMLCanvasElement, srgb: boolean) => {
-      const tex = new THREE.CanvasTexture(c);
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 8;
-      return tex;
-    };
-    return {
-      map: setup(cBase, true),
-      lit: setup(cLit, false),
-      repeat: new THREE.Vector2(1 / (cellsX * 1.5), 1 / (cellsY * TYP_HEIGHT)),
-    };
-  }, []);
-}
-
 /** Deterministic pseudo-random value in [0, 1) for a texture cell. */
 function hash(i: number, j: number): number {
   const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453;
@@ -177,11 +119,16 @@ const HDRI = {
   night: "/hdri/shanghai_bund_1k.hdr",
 };
 
-/** Loads both HDRIs once and returns the one for the current mode, prepared for direct sampling. */
+/** Loads both HDRIs once; returns the current one for the sky and its PMREM for the glass. */
 function useHdri(night: boolean) {
   const [day, nite] = useLoader(RGBELoader, [HDRI.day, HDRI.night]);
-  const prepared = useMemo(() => [prepareEnvTexture(day), prepareEnvTexture(nite)], [day, nite]);
-  return night ? prepared[1] : prepared[0];
+  const gl = useThree((st) => st.gl);
+  const glass = useMemo(() => {
+    for (const t of [day, nite]) t.mapping = THREE.EquirectangularReflectionMapping;
+    return [createGlassEnv(gl, day), createGlassEnv(gl, nite)];
+  }, [gl, day, nite]);
+  useEffect(() => () => glass.forEach((t) => t.dispose()), [glass]);
+  return night ? { env: nite, glassEnv: glass[1] } : { env: day, glassEnv: glass[0] };
 }
 
 function GlassStages({
@@ -199,27 +146,32 @@ function GlassStages({
   explodeRef: RefObject<{ gap: number; thin: number }>;
   extractRef: RefObject<ExtractState>;
 }) {
-  const { map, lit, repeat } = useFacadeTextures();
   const roofRef = useRef<THREE.Group>(null);
   const ringsRef = useRef<THREE.Group>(null);
   // One shared facade material; one glass ring per floor so the stack can open and explode.
-  const material = useMemo(() => new THREE.ShaderMaterial(facadeMaterialParams()) as FacadeMaterial, []);
-  const rings = useMemo(() => Array.from({ length: FLOORS }, (_, f) => extrudeUp(stageForFloor(f).polygon, floorHeight(f))), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- env swaps via the uniform below
+  const material = useMemo(() => createFacadeMaterial(env), []);
+  const rings = useMemo(
+    () =>
+      Array.from({ length: FLOORS }, (_, f) => {
+        const g = extrudeUp(stageForFloor(f).polygon, floorHeight(f));
+        // floor index and height: the shader's interior mapping and per-pane variation key on them
+        const n = g.attributes.position.count;
+        const a = new Float32Array(n * 2);
+        for (let i = 0; i < n; i++) {
+          a[i * 2] = f;
+          a[i * 2 + 1] = floorHeight(f);
+        }
+        g.setAttribute("aFloor", new THREE.BufferAttribute(a, 2));
+        return g;
+      }),
+    [],
+  );
   const mat = () => (ringsRef.current?.children[0] as THREE.Mesh | undefined)?.material as FacadeMaterial | undefined;
 
   useEffect(() => {
     const m = mat();
-    if (!m) return;
-    m.uniforms.uMap.value = map;
-    m.uniforms.uLit.value = lit;
-    m.uniforms.uRepeat.value.copy(repeat);
-  }, [map, lit, repeat]);
-
-  useEffect(() => {
-    const m = mat();
-    if (!m) return;
-    m.uniforms.uEnv.value = env;
-    m.uniforms.uEnvMaxLod.value = envMaxLod(env);
+    if (m) m.uniforms.uEnv.value = env;
   }, [env]);
 
   useFrame((_, dt) => {
@@ -238,7 +190,8 @@ function GlassStages({
     u.uNight.value = THREE.MathUtils.damp(u.uNight.value, night ? 1 : 0, 3, dt);
     u.uOpacity.value = THREE.MathUtils.damp(u.uOpacity.value, dim ? 0.14 : 1, 6, dt);
     u.uEnvIntensity.value = THREE.MathUtils.damp(u.uEnvIntensity.value, night ? 1.1 : 1, 3, dt);
-    u.uReflectivity.value = THREE.MathUtils.damp(u.uReflectivity.value, night ? 1.8 : 1.3, 3, dt);
+    u.uSunIntensity.value = THREE.MathUtils.damp(u.uSunIntensity.value, night ? 0 : 2.4, 3, dt);
+    u.uGround.value.lerpColors(DAY_GROUND, NIGHT_GROUND, u.uNight.value);
     m.depthWrite = !dim;
   });
 
@@ -1321,11 +1274,19 @@ function Scene(props: SceneProps) {
 
     const ex = extractRef.current;
     const sel = selected !== null && !cleaning.active;
-    if (sel && ex.floor !== selected) ex.floor = selected;
+    if (sel && ex.floor < 0) ex.floor = selected;
+    // Selecting another floor while one is out: put the current one back first, then switch.
+    const switching = sel && ex.floor >= 0 && ex.floor !== selected;
+    const out = sel && !switching;
     // Choreography: open the stack above the floor, then pop the plate out; reverse on release.
-    ex.open = THREE.MathUtils.damp(ex.open, sel ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
-    ex.t = THREE.MathUtils.damp(ex.t, sel && ex.open > 0.55 ? 1 : 0, 3.5, dt);
+    ex.open = THREE.MathUtils.damp(ex.open, out ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
+    ex.t = THREE.MathUtils.damp(ex.t, out && ex.open > 0.55 ? 1 : 0, 3.5, dt);
     ex.shift = THREE.MathUtils.damp(ex.shift, sel ? 1 : 0, 3, dt);
+    if (switching && ex.t < 0.01 && ex.open < 0.02) {
+      ex.t = 0;
+      ex.open = 0;
+      ex.floor = selected;
+    }
     if (!sel && ex.t < 0.002 && ex.open < 0.002) {
       ex.t = 0;
       ex.open = 0;
@@ -1347,12 +1308,11 @@ function Scene(props: SceneProps) {
       b.q1.setFromAxisAngle(AX_X, 0.95);
       b.q2.setFromAxisAngle(AX_Y, PLATE_YAW);
       b.quat.copy(cam.quaternion).multiply(b.q1).multiply(b.q2);
+      // Blend slot -> camera pose with the (already damped) pop-out amount. No extra lag:
+      // once fully out the plate is rigidly linked to the camera.
       const e = ex.t * ex.t * (3 - 2 * ex.t);
-      b.rest.lerp(b.pos, e);
-      b.q1.identity().slerp(b.quat, e);
-      const k = 1 - Math.exp(-7 * dt);
-      ex.pos.lerp(b.rest, k);
-      ex.quat.slerp(b.q1, k);
+      ex.pos.copy(b.rest).lerp(b.pos, e);
+      ex.quat.identity().slerp(b.quat, e);
       // shift the picture right so the tower sits left of the pulled-out floor
       const cam2 = cam as THREE.PerspectiveCamera;
       if (ex.shift > 0.001) cam2.setViewOffset(size.width, size.height, ex.shift * 0.17 * size.width, 0, size.width, size.height);
@@ -1364,7 +1324,7 @@ function Scene(props: SceneProps) {
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
   const dim = showTenants || explode;
   const controlsRef = useRef<ControlsLike | null>(null);
-  const env = useHdri(skyNight);
+  const { env, glassEnv } = useHdri(skyNight);
   return (
     <>
       <fog attach="fog" args={["#1a2230", 420, 1100]} />
@@ -1391,7 +1351,7 @@ function Scene(props: SceneProps) {
       <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>
-        <GlassStages night={night} dim={dim} env={env} unit={unit} explodeRef={explodeRef} extractRef={extractRef} />
+        <GlassStages night={night} dim={dim} env={glassEnv} unit={unit} explodeRef={explodeRef} extractRef={extractRef} />
         <Structure visible={showTenants && !explode} />
         <FloorSlices
           showTenants={showTenants}
