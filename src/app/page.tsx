@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { FactGrid } from "@/components/FactGrid";
 import { Gallery } from "@/components/Gallery";
-import { MapEmbed } from "@/components/MapEmbed";
+import { LocationZoom } from "@/components/LocationZoom";
 import { Section } from "@/components/Section";
 import { TenantList } from "@/components/TenantList";
 import { TowerViewer } from "@/components/tower/TowerViewer";
 import { photos } from "@/data/photos";
 import { presentationPath } from "@/data/presentation";
-import { annexes, architecture, facts, garage, heroFacts, location, plans, sources, timeline } from "@/data/tower";
+import { annexes, architecture, facts, garage, heroFacts, plans, sources, timeline } from "@/data/tower";
 import { l, pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
@@ -137,7 +137,7 @@ export default function Home() {
             </article>
           ))}
         </div>
-        <MapEmbed lat={location.lat} lon={location.lon} lang={lang} />
+        <LocationZoom lang={lang} />
       </Section>
 
       <Section id="gallery" eyebrow={s.gallery.eyebrow} title={s.gallery.title} intro={s.gallery.intro}>
