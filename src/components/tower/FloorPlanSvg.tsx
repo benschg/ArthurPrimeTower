@@ -11,7 +11,6 @@ import {
   polygonArea,
   stageForFloor,
   stages,
-  struts,
   type Pt,
 } from "./geometry";
 
@@ -45,10 +44,6 @@ export function FloorPlanSvg({ floor, size = 220, lang }: { floor: number; size?
   const stageIndex = stages.indexOf(stage);
   const pushedEdge = stageIndex === 2 ? EDGE_NE : stageIndex === 3 ? EDGE_SE : stageIndex === 4 ? EDGE_W : -1;
   const edge = (i: number): [Pt, Pt] => [poly[i], poly[(i + 1) % poly.length]];
-
-  const strutPts = struts()
-    .filter((s) => Math.abs(s.to[1] - (stageIndex > 0 ? stages[stageIndex].from : -1)) < 0.01)
-    .map((s) => [s.to[0], s.to[2]] as Pt);
 
   const rotDeg = (-DRAWING_ROT_Y * 180) / Math.PI;
   const dims = {
@@ -87,9 +82,6 @@ export function FloorPlanSvg({ floor, size = 220, lang }: { floor: number; size?
       ))}
       {cols.map(([x, y], i) => (
         <rect key={i} x={sx(x) - 1.6} y={sy(y) - 1.6} width={3.2} height={3.2} fill="var(--paper)" />
-      ))}
-      {strutPts.map(([x, y], i) => (
-        <circle key={i} cx={sx(x)} cy={sy(y)} r={2.6} fill="none" stroke="var(--accent)" strokeWidth={1.2} />
       ))}
       <g transform={`translate(${W - 12} 14)`} fill="var(--muted)">
         <polygon points="0,-9 4,4 0,1 -4,4" />

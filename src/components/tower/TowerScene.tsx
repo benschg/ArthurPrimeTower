@@ -31,7 +31,6 @@ import {
   stageForFloor,
   stages,
   stationPlatform,
-  struts,
   TOWER_HEIGHT,
   TYP_HEIGHT,
   type Pt,
@@ -679,8 +678,6 @@ function Roof({ night, party }: { night: boolean; party: boolean }) {
 
 function Structure({ visible }: { visible: boolean }) {
   const columns = useMemo(() => perimeterColumns(stages[1].polygon), []);
-  const list = useMemo(() => struts(), []);
-  const up = useMemo(() => new THREE.Vector3(0, 1, 0), []);
   return (
     <group visible={visible}>
       {cores.map((c) => (
@@ -695,20 +692,6 @@ function Structure({ visible }: { visible: boolean }) {
           <meshStandardMaterial color="#b9c2cc" roughness={0.7} />
         </mesh>
       ))}
-      {list.map((s, i) => {
-        const from = new THREE.Vector3(s.from[0], s.from[1], -s.from[2]);
-        const to = new THREE.Vector3(s.to[0], s.to[1], -s.to[2]);
-        const mid = from.clone().add(to).multiplyScalar(0.5);
-        const dir = to.clone().sub(from);
-        const len = dir.length();
-        const quat = new THREE.Quaternion().setFromUnitVectors(up, dir.normalize());
-        return (
-          <mesh key={`s${i}`} position={mid} quaternion={quat}>
-            <cylinderGeometry args={[0.4, 0.4, len, 10]} />
-            <meshStandardMaterial color="#e0b458" metalness={0.3} roughness={0.5} emissive="#5a4210" emissiveIntensity={0.4} />
-          </mesh>
-        );
-      })}
     </group>
   );
 }
@@ -842,26 +825,20 @@ function Footprint({ polygon, height, color, floors, name, note }: (typeof neigh
   );
 }
 
-function Site({ garageT, night, lang }: { garageT: number; night: boolean; lang: Lang }) {
-  const showGarage = garageT > 0.001;
+function Site({ lang }: { lang: Lang }) {
   const lab = ui[lang].viewer.labels;
   const bRot = (bridge.bearing * Math.PI) / 180;
   const rRot = (railway.bearing * Math.PI) / 180;
   const station = useMemo(() => extrudeUp(stationPlatform, 1.2), []);
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh name="ground" rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[1200, 1200]} />
-        <meshStandardMaterial
-          color={night ? "#0d131a" : "#161d27"}
-          roughness={1}
-          transparent={showGarage}
-          opacity={THREE.MathUtils.lerp(1, 0.12, garageT)}
-          depthWrite={!showGarage}
-        />
+        {/* Always in the transparent pass with depth writes on; the Blender animates opacity and colour. */}
+        <meshStandardMaterial color="#161d27" roughness={1} transparent opacity={1} />
       </mesh>
       <Grid
-        renderOrder={-1}
+        renderOrder={1}
         position={[0, 0.03, 0]}
         args={[1200, 1200]}
         cellSize={10}
@@ -941,8 +918,18 @@ function GaragePeekTarget({ onChange }: { onChange: (v: boolean) => void }) {
   );
 }
 
-function Garage({ lang, t }: { lang: Lang; t: number }) {
+function Garage({ lang }: { lang: Lang }) {
   const lab = ui[lang].viewer.labels;
+  // Remember each material's designed opacity so the blender can scale it, and draw the
+  // whole garage before the ground plane so it shows through the translucent plaza.
+  const prime = (g: THREE.Group | null) => {
+    if (!g) return;
+    g.traverse((o) => {
+      o.renderOrder = -2;
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m && m.userData.baseOpacity === undefined) m.userData.baseOpacity = m.opacity;
+    });
+  };
   const bays = useMemo(() => {
     const all = parkingBays();
     // 182 spaces for the tower: 91 per level, closest to the ramp first
@@ -978,18 +965,18 @@ function Garage({ lang, t }: { lang: Lang; t: number }) {
   }, [bays]);
 
   return (
-    <group>
+    <group name="garage" ref={prime}>
       {Array.from({ length: BASEMENT_LEVELS }, (_, level) => {
         const yTop = -level * BASEMENT_HEIGHT;
         const yFloor = -(level + 1) * BASEMENT_HEIGHT;
         return (
           <group key={level}>
             <mesh geometry={slab} position={[0, yFloor, 0]}>
-              <meshStandardMaterial color="#7dd3c0" transparent opacity={0.22 * t} depthWrite={false} side={THREE.DoubleSide} />
+              <meshStandardMaterial color="#7dd3c0" transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} />
             </mesh>
-            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.8 * t }))} position={[0, yFloor, 0]} />
-            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.35 * t }))} position={[0, yTop - 0.05, 0]} />
-            <Html zIndexRange={[5, 0]} position={[-40, yFloor + 1, 30]} distanceFactor={200} style={{ pointerEvents: "none", opacity: t }}>
+            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.8 }))} position={[0, yFloor, 0]} />
+            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.35 }))} position={[0, yTop - 0.05, 0]} />
+            <Html zIndexRange={[5, 0]} position={[-40, yFloor + 1, 30]} distanceFactor={200} style={{ pointerEvents: "none" }} className="garage-label">
               <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent whitespace-nowrap">
                 {level === 0 ? lab.level1 : lab.level2}
               </div>
@@ -1001,26 +988,26 @@ function Garage({ lang, t }: { lang: Lang; t: number }) {
       {garagePolygon.map(([e, n], i) => (
         <mesh key={i} position={[e, -BASEMENT_LEVELS * BASEMENT_HEIGHT * 0.5, -n]}>
           <boxGeometry args={[0.2, BASEMENT_LEVELS * BASEMENT_HEIGHT, 0.2]} />
-          <meshBasicMaterial color="#7dd3c0" transparent opacity={0.6 * t} />
+          <meshBasicMaterial color="#7dd3c0" transparent opacity={0.6} />
         </mesh>
       ))}
       {/* Cores and raft foundation continue below ground */}
       {cores.map((c) => (
         <mesh key={c.name} position={[c.center[0], -BASEMENT_LEVELS * BASEMENT_HEIGHT * 0.5, -c.center[1]]} rotation={[0, DRAWING_ROT_Y, 0]}>
           <boxGeometry args={[c.size[0], BASEMENT_LEVELS * BASEMENT_HEIGHT, c.size[1]]} />
-          <meshStandardMaterial color="#8d97a3" transparent opacity={0.7 * t} />
+          <meshStandardMaterial color="#8d97a3" transparent opacity={0.7} />
         </mesh>
       ))}
       {/* Ramp */}
       <mesh geometry={ramp} position={[0, -BASEMENT_HEIGHT * 0.5, 0]} rotation={[0, 0, 0]}>
-        <meshStandardMaterial color="#4f8fd6" transparent opacity={0.45 * t} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#4f8fd6" transparent opacity={0.45} side={THREE.DoubleSide} />
       </mesh>
-      <Html zIndexRange={[5, 0]} position={[38, 2, -50]} center distanceFactor={200} style={{ pointerEvents: "none", opacity: t }}>
+      <Html zIndexRange={[5, 0]} position={[38, 2, -50]} center distanceFactor={200} style={{ pointerEvents: "none" }} className="garage-label">
         <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent-2 whitespace-nowrap">{lab.ramp}</div>
       </Html>
       <instancedMesh ref={inst} args={[undefined, undefined, 91 * BASEMENT_LEVELS]}>
         <boxGeometry args={[2.2, 0.5, 4.6]} />
-        <meshStandardMaterial color="#4f8fd6" emissive="#1d4f8f" emissiveIntensity={0.8} transparent opacity={0.9 * t} />
+        <meshStandardMaterial color="#4f8fd6" emissive="#1d4f8f" emissiveIntensity={0.8} transparent opacity={0.9} />
       </instancedMesh>
     </group>
   );
@@ -1088,68 +1075,113 @@ function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage:
   return null;
 }
 
-/** Eases 0..1 toward the requested day/night state so lights, sky and glass cross-fade. */
-function useNightBlend(night: boolean) {
-  const [t, setT] = useState(night ? 1 : 0);
-  const ref = useRef(t);
-  useFrame((_, dt) => {
-    const next = THREE.MathUtils.damp(ref.current, night ? 1 : 0, 2.2, dt);
-    if (Math.abs(next - ref.current) > 0.002) {
-      ref.current = next;
-      setT(next);
-    } else if (ref.current !== (night ? 1 : 0) && Math.abs(next - (night ? 1 : 0)) < 0.01) {
-      ref.current = night ? 1 : 0;
-      setT(ref.current);
+const DAY_FOG = new THREE.Color("#1a2230");
+const NIGHT_FOG = new THREE.Color("#070a10");
+const DAY_SUN = new THREE.Color("#fff3dd");
+const NIGHT_SUN = new THREE.Color("#9fb4d6");
+const DAY_GROUND = new THREE.Color("#161d27");
+const NIGHT_GROUND = new THREE.Color("#0d131a");
+
+/**
+ * Drives the day/night and garage fades imperatively every frame (no React re-renders):
+ * lights, fog, sky intensities, ground opacity and garage opacities. React is only told
+ * when the sky HDRI should swap (midpoint of the fade) and when the garage should mount.
+ */
+function Blender({
+  night,
+  garageOpen,
+  onSkyNight,
+  onGarageMounted,
+}: {
+  night: boolean;
+  garageOpen: boolean;
+  onSkyNight: (v: boolean) => void;
+  onGarageMounted: (v: boolean) => void;
+}) {
+  const state = useRef({ night: night ? 1 : 0, garage: 0, skyNight: night, mounted: false });
+  const tmp = useRef(new THREE.Color());
+
+  useFrame(({ scene }, dt) => {
+    const st = state.current;
+    const refs = {
+      ambient: scene.getObjectByName("ambient") as THREE.AmbientLight | undefined,
+      sun: scene.getObjectByName("sun") as THREE.DirectionalLight | undefined,
+      fill: scene.getObjectByName("fill") as THREE.DirectionalLight | undefined,
+      fog: scene.fog as THREE.Fog | null,
+      ground: (scene.getObjectByName("ground") as THREE.Mesh | undefined)?.material as THREE.MeshStandardMaterial | undefined,
+      garage: scene.getObjectByName("garage") as THREE.Group | undefined,
+    };
+    st.night = THREE.MathUtils.damp(st.night, night ? 1 : 0, 2.2, dt);
+    st.garage = THREE.MathUtils.damp(st.garage, garageOpen ? 1 : 0, 4, dt);
+    if (Math.abs(st.night - (night ? 1 : 0)) < 0.004) st.night = night ? 1 : 0;
+    if (Math.abs(st.garage - (garageOpen ? 1 : 0)) < 0.004) st.garage = garageOpen ? 1 : 0;
+    const nt = st.night;
+    const gt = st.garage;
+
+    // lights and fog
+    if (refs.ambient) refs.ambient.intensity = THREE.MathUtils.lerp(0.5, 0.22, nt);
+    if (refs.sun) {
+      refs.sun.intensity = THREE.MathUtils.lerp(2.4, 0.45, nt);
+      refs.sun.color.copy(DAY_SUN).lerp(NIGHT_SUN, nt);
+    }
+    if (refs.fill) refs.fill.intensity = THREE.MathUtils.lerp(0.6, 0.2, nt);
+    if (refs.fog) refs.fog.color.copy(DAY_FOG).lerp(NIGHT_FOG, nt);
+
+    // sky: swap the HDRI at the midpoint, dipping through dark to hide the cut
+    const skyNight = nt >= 0.5;
+    if (skyNight !== st.skyNight) {
+      st.skyNight = skyNight;
+      onSkyNight(skyNight);
+    }
+    const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2);
+    scene.backgroundIntensity = (skyNight ? 0.22 : 0.55) * (1 - dip * 0.9);
+    scene.environmentIntensity = (skyNight ? 0.5 : 0.8) * (1 - dip * 0.6);
+    scene.backgroundBlurriness = skyNight ? 0.08 : 0.02;
+
+    // ground and garage
+    const ground = refs.ground;
+    if (ground) {
+      ground.opacity = THREE.MathUtils.lerp(1, 0.12, gt);
+      ground.color.copy(tmp.current.copy(DAY_GROUND).lerp(NIGHT_GROUND, nt));
+    }
+    const mounted = gt > 0.001;
+    if (mounted !== st.mounted) {
+      st.mounted = mounted;
+      onGarageMounted(mounted);
+    }
+    const g = refs.garage;
+    if (g) {
+      g.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+        if (m && m.userData.baseOpacity !== undefined) m.opacity = m.userData.baseOpacity * gt;
+      });
+      for (const el of document.querySelectorAll<HTMLElement>(".garage-label")) el.style.opacity = String(gt);
     }
   });
-  return t;
+  return null;
 }
-
-/** Eases a value toward `target` at `rate`, re-rendering while it moves. */
-function useEased(target: number, rate: number) {
-  const [v, setV] = useState(target);
-  const ref = useRef(v);
-  useFrame((_, dt) => {
-    const next = THREE.MathUtils.damp(ref.current, target, rate, dt);
-    if (Math.abs(next - ref.current) > 0.002) {
-      ref.current = next;
-      setV(next);
-    } else if (ref.current !== target && Math.abs(next - target) < 0.01) {
-      ref.current = target;
-      setV(target);
-    }
-  });
-  return v;
-}
-
-const mixColor = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 
 function Scene(props: SceneProps) {
   const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
   const labelFloor = selected ?? hovered;
-  const nt = useNightBlend(night);
   const [peek, setPeek] = useState(false);
   const garageOpen = showGarage || (peek && !explode && !cleaning.active);
-  const garageT = useEased(garageOpen ? 1 : 0, 4);
-  // The sky swaps HDRI at the midpoint of the fade, dipping through dark so the cut is hidden.
-  const skyNight = nt >= 0.5;
-  const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2) ; // 1 at the midpoint, 0 at either end
-  const skyMix = skyNight ? 1 : 0;
-  const bgIntensity = THREE.MathUtils.lerp(0.55, 0.22, skyMix) * (1 - dip * 0.9);
-  const envIntensity = THREE.MathUtils.lerp(0.8, 0.5, skyMix) * (1 - dip * 0.6);
+  const [skyNight, setSkyNight] = useState(night);
+  const [garageMounted, setGarageMounted] = useState(false);
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
   const dim = showTenants || explode;
   const controlsRef = useRef<ControlsLike | null>(null);
   const env = useHdri(skyNight);
   return (
     <>
-      <fog attach="fog" args={[mixColor("#1a2230", "#070a10", nt), 420, 1100]} />
+      <fog attach="fog" args={["#1a2230", 420, 1100]} />
 
-      <ambientLight intensity={THREE.MathUtils.lerp(0.5, 0.22, nt)} />
+      <ambientLight name="ambient" intensity={0.5} />
       <directionalLight
+        name="sun"
         position={[-140, 220, 120]}
-        intensity={THREE.MathUtils.lerp(2.4, 0.45, nt)}
-        color={mixColor("#fff3dd", "#9fb4d6", nt)}
+        intensity={2.4}
+        color="#fff3dd"
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-260}
@@ -1160,15 +1192,10 @@ function Scene(props: SceneProps) {
         shadow-camera-far={700}
         shadow-bias={-0.0004}
       />
-      <directionalLight position={[160, 90, -140]} intensity={THREE.MathUtils.lerp(0.6, 0.2, nt)} color="#8fc9ff" />
+      <directionalLight name="fill" position={[160, 90, -140]} intensity={0.6} color="#8fc9ff" />
 
-      <Environment
-        map={env}
-        background
-        backgroundBlurriness={skyNight ? 0.08 : 0.02}
-        backgroundIntensity={bgIntensity}
-        environmentIntensity={envIntensity}
-      />
+      <Environment map={env} background />
+      <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>
         <GlassStages night={night} dim={dim} env={env} unit={unit} />
@@ -1177,9 +1204,9 @@ function Scene(props: SceneProps) {
         {labelFloor !== null && !cleaning.active && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
-      <Site garageT={garageT} night={night} lang={lang} />
+      <Site lang={lang} />
       <GaragePeekTarget onChange={setPeek} />
-      {garageT > 0.001 && <Garage lang={lang} t={garageT} />}
+      {garageMounted && <Garage lang={lang} />}
 
       <OrbitControls
         ref={controlsRef as never}
