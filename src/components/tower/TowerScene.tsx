@@ -370,10 +370,10 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
     const t = clock.elapsedTime;
     if (cleaning.active) {
       // follow the pointer target
-      pos.current.u = THREE.MathUtils.damp(pos.current.u, target.current.u, 6, dt);
-      pos.current.y = THREE.MathUtils.damp(pos.current.y, target.current.y, 6, dt);
-      // squeegee: clear dirt under the cradle
-      const cx = pos.current.u * len;
+      pos.current.u = THREE.MathUtils.damp(pos.current.u, target.current.u, 14, dt);
+      pos.current.y = THREE.MathUtils.damp(pos.current.y, target.current.y, 14, dt);
+      // squeegee: clear dirt under the cradle (canvas x runs against `along`, like the plane's u)
+      const cx = (1 - pos.current.u) * len;
       const cy = pos.current.y - lowY;
       const px = cx * CLEAN_PX;
       const py = (H - cy) * CLEAN_PX;
@@ -415,7 +415,13 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
   });
 
   // Dirt plane sits just outside the glass, rotated so local +z is the outward normal.
+  // Its local +x then runs against `along`, hence the mirrored u below.
   const planeRot = Math.atan2(out[0], -out[1]);
+  const steer = (uv: THREE.Vector2 | undefined) => {
+    if (!uv) return;
+    target.current.u = THREE.MathUtils.clamp(1 - uv.x, cradleHalf / len, 1 - cradleHalf / len);
+    target.current.y = lowY + THREE.MathUtils.clamp(uv.y, 0.02, 0.98) * H;
+  };
   const mid: [number, number, number] = [a[0] + (along[0] * len) / 2 + out[0] * 0.45, (lowY + highY) / 2, -(a[1] + (along[1] * len) / 2 + out[1] * 0.45)];
 
   return (
@@ -512,11 +518,15 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
         position={mid}
         rotation={[0, planeRot, 0]}
         visible={cleaning.active}
-        onPointerMove={(e) => {
-          if (!cleaning.active || !e.uv) return;
-          target.current.u = THREE.MathUtils.clamp(e.uv.x, cradleHalf / len, 1 - cradleHalf / len);
-          target.current.y = lowY + THREE.MathUtils.clamp(e.uv.y, 0.02, 0.98) * H;
+        onPointerDown={(e) => {
+          if (!cleaning.active) return;
+          e.stopPropagation();
+          // keep receiving moves while a finger or button drags off the plane
+          (e.target as Element | undefined)?.setPointerCapture?.(e.pointerId);
+          steer(e.uv);
         }}
+        onPointerUp={(e) => (e.target as Element | undefined)?.releasePointerCapture?.(e.pointerId)}
+        onPointerMove={(e) => cleaning.active && steer(e.uv)}
       >
         <planeGeometry args={[len, H]} />
         <meshBasicMaterial map={dirt.tex} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-2} />

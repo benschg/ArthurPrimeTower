@@ -44,6 +44,13 @@ await page.goto(base + "/#clean", { waitUntil: "networkidle0", timeout: 120000 }
 await page.waitForSelector("canvas", { timeout: 60000 });
 await wait(4500);
 await page.screenshot({ path: path.join(out, "game-start.png") });
+// direction check: pointer at the left of the facade, then the right
+await page.mouse.move(640, 420);
+await wait(900);
+await page.screenshot({ path: path.join(out, "game-left.png") });
+await page.mouse.move(820, 420);
+await wait(900);
+await page.screenshot({ path: path.join(out, "game-right.png") });
 // sweep the pointer over the facade in rows
 for (let row = 0; row < 6; row++) {
   const y = 250 + row * 70;

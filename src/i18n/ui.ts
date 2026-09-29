@@ -116,8 +116,8 @@ const en = {
   },
   game: {
     title: "Window cleaning",
-    start: "Click the cradle on the roof to start cleaning",
-    hint: "Move the mouse over the facade to steer the cradle. Clear every pane before the clock runs out.",
+    start: "Click or tap the cradle on the roof to start cleaning",
+    hint: "Move the mouse, or drag a finger, over the facade to steer the cradle. Clear every pane before the clock runs out.",
     cleaned: "cleaned",
     time: "time",
     stop: "Stop",
@@ -244,8 +244,8 @@ const de: typeof en = {
   },
   game: {
     title: "Fensterputzen",
-    start: "Auf die Gondel auf dem Dach klicken, um mit dem Putzen zu beginnen",
-    hint: "Mit der Maus über die Fassade fahren, um die Gondel zu steuern. Alle Scheiben säubern, bevor die Zeit abläuft.",
+    start: "Auf die Gondel auf dem Dach klicken oder tippen, um mit dem Putzen zu beginnen",
+    hint: "Mit der Maus oder dem Finger über die Fassade fahren, um die Gondel zu steuern. Alle Scheiben säubern, bevor die Zeit abläuft.",
     cleaned: "geputzt",
     time: "Zeit",
     stop: "Beenden",
