@@ -347,3 +347,28 @@ export function parkingBays(): { x: number; z: number; rot: number }[] {
   }
   return bays;
 }
+
+/** Inverse of drawingToWorld: world (East, North) back into the letting-plan drawing frame. */
+export function worldToDrawing([e, n]: Pt): Pt {
+  const dx = e - E0;
+  const dy = n - N0;
+  return [Math.sin(DA) * dx + Math.cos(DA) * dy, Math.cos(DA) * dx - Math.sin(DA) * dy];
+}
+
+/** True when vertex i of the polygon is a convex corner (independent of winding). */
+export function isConvexVertex(poly: Pt[], i: number): boolean {
+  const n = poly.length;
+  const p = poly[(i - 1 + n) % n];
+  const c = poly[i];
+  const q = poly[(i + 1) % n];
+  const cross = (c[0] - p[0]) * (q[1] - c[1]) - (c[1] - p[1]) * (q[0] - c[0]);
+  return Math.sign(cross) === Math.sign(signedArea(poly));
+}
+
+/** Core bounding boxes in the drawing frame: [x0, y0, x1, y1]. */
+export function coreBoxesDrawing(): [number, number, number, number][] {
+  return cores.map((c) => {
+    const [cx, cy] = worldToDrawing(c.center);
+    return [cx - c.size[0] / 2, cy - c.size[1] / 2, cx + c.size[0] / 2, cy + c.size[1] / 2];
+  });
+}

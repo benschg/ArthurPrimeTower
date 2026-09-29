@@ -21,6 +21,13 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
 - **Maintenance unit and game**: a facade-access cradle patrols the Hardbrücke facade. Click it (or open `/#clean`)
   to play a 60-second window-cleaning game: move the pointer over the facade to steer the cradle and squeegee the
   dirt layer away.
+- **Exploded interiors** (`src/components/tower/interiorLayout.ts`, `Interiors.tsx`): in Explode mode the plates thin
+  out and every floor shows its fit-out, derived from the 31st-floor plan: cellular offices along each facade with desk,
+  chair and screen, a ring corridor with doors, corner meeting rooms, two banks of four lifts facing a lobby in the main
+  core, a fire lift and stairs in the north-east core, a lobby with reception on the ground floor, conference tables on
+  34 and round tables on 35. About 9,400 pieces, one instanced draw call per kind. Zoom-to-cursor lets you get close.
+- **Entrances**: main entrance with canopy and the bank branch on the recessed south-east porch, Clouds entrance on the
+  plaza side. `/#entrance` opens the site at street level in front of the main door.
 - **Photos** (`public/photos/`, `src/data/photos.ts`): 17 freely licensed images from Wikimedia Commons with
   attribution, downloaded and resized by `scripts/fetch-photos.mjs`.
 
@@ -39,6 +46,7 @@ node scripts/fetch-photos.mjs                    # refresh photos + metadata (po
 node scripts/screenshot.mjs http://localhost:3000 screenshots        # headless Chrome smoke test of every viewer mode
 node scripts/screenshot-game.mjs http://localhost:3000 screenshots   # language default/persistence and the cleaning game
 node scripts/screenshot-roof.mjs http://localhost:3000 screenshots   # roof close-ups by day and night
+node scripts/screenshot-explode.mjs http://localhost:3000 screenshots # entrance at street level, exploded interiors
 ```
 
 ## Licences and credits

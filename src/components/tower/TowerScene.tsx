@@ -6,6 +6,8 @@ import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "
 import * as THREE from "three";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { envMaxLod, facadeMaterialParams, prepareEnvTexture, type FacadeMaterial } from "./facadeShader";
+import { Interiors } from "./Interiors";
+import { entrances } from "./interiorLayout";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { floorBands } from "@/data/tower";
 import { pick, type Lang } from "@/i18n";
@@ -558,6 +560,76 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
   );
 }
 
+/** Ground-floor entrances: frames, glass leaves and the canopy over the main entrance. */
+function Entrances() {
+  const list = useMemo(() => entrances(), []);
+  return (
+    <group>
+      {list.map((d) => {
+        const main = d.name === "main";
+        const h = main ? 3.2 : 2.9;
+        return (
+          <group key={d.name} position={[d.e, 0, -d.n]} rotation={[0, d.rot, 0]}>
+            {/* frame: two jambs and a header, so the lobby shows through the glass */}
+            {[-1, 1].map((side) => (
+              <mesh key={`j${side}`} position={[side * (d.width / 2 + 0.08), h / 2, 0]}>
+                <boxGeometry args={[0.16, h, 0.24]} />
+                <meshStandardMaterial color="#141a21" roughness={0.6} metalness={0.4} />
+              </mesh>
+            ))}
+            <mesh position={[0, h - 0.12, 0]}>
+              <boxGeometry args={[d.width + 0.32, 0.24, 0.24]} />
+              <meshStandardMaterial color="#141a21" roughness={0.6} metalness={0.4} />
+            </mesh>
+            {/* lit lobby behind the doors */}
+            <mesh position={[0, (h - 0.24) / 2, -0.6]}>
+              <boxGeometry args={[d.width, h - 0.24, 0.05]} />
+              <meshStandardMaterial color="#3d5f58" emissive="#8fd3c4" emissiveIntensity={0.55} roughness={1} />
+            </mesh>
+            {/* glass leaves, one slightly ajar */}
+            {[-1, 1].map((side) => (
+              <mesh key={side} position={[side * (d.width / 4), (h - 0.24) / 2, side < 0 ? 0.22 : 0.05]} rotation={[0, side < 0 ? -0.3 : 0, 0]}>
+                <boxGeometry args={[d.width / 2 - 0.1, h - 0.3, 0.04]} />
+                <meshPhysicalMaterial color="#cfeee6" roughness={0.05} metalness={0.1} transparent opacity={0.35} />
+              </mesh>
+            ))}
+            {/* handles */}
+            {[-1, 1].map((side) => (
+              <mesh key={`h${side}`} position={[side * 0.25, 1.05, 0.2]}>
+                <cylinderGeometry args={[0.02, 0.02, 0.9, 6]} />
+                <meshStandardMaterial color="#d7dee6" metalness={0.7} roughness={0.3} />
+              </mesh>
+            ))}
+            {main && (
+              <>
+                {/* canopy with the PRIME TOWER fascia */}
+                <mesh position={[0, h + 0.55, 1.9]} castShadow>
+                  <boxGeometry args={[d.width + 3.2, 0.3, 3.8]} />
+                  <meshStandardMaterial color="#3a4652" roughness={0.6} metalness={0.3} />
+                </mesh>
+                <mesh position={[0, h + 0.55, 3.8]}>
+                  <boxGeometry args={[d.width + 3.2, 0.5, 0.06]} />
+                  <meshStandardMaterial color="#e8edf2" emissive="#e8edf2" emissiveIntensity={0.9} toneMapped={false} />
+                </mesh>
+                <mesh position={[0, h + 0.38, 1.9]}>
+                  <boxGeometry args={[d.width + 3.0, 0.04, 3.6]} />
+                  <meshStandardMaterial color="#fff2d6" emissive="#fff2d6" emissiveIntensity={0.8} toneMapped={false} />
+                </mesh>
+                {[-1, 1].map((side) => (
+                  <mesh key={`c${side}`} position={[side * (d.width / 2 + 1.2), (h + 0.4) / 2, 3.3]}>
+                    <cylinderGeometry args={[0.12, 0.12, h + 0.4, 10]} />
+                    <meshStandardMaterial color="#8b949e" metalness={0.5} roughness={0.5} />
+                  </mesh>
+                ))}
+              </>
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 /** Radial glow sprite texture for the aviation lights. */
 function useGlowTexture() {
   return useMemo(() => {
@@ -697,6 +769,7 @@ function Structure({ visible }: { visible: boolean }) {
 }
 
 const noRaycast = () => null;
+const EXPLODE_GAP = 2.6;
 
 function FloorSlices({
   showTenants,
@@ -706,7 +779,8 @@ function FloorSlices({
   onHover,
   onSelect,
   interactive,
-}: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & { interactive: boolean }) {
+  explodeRef,
+}: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & { interactive: boolean; explodeRef: RefObject<{ gap: number; thin: number }> }) {
   const geos = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
@@ -716,13 +790,14 @@ function FloorSlices({
     [],
   );
   const group = useRef<THREE.Group>(null);
-  const gap = useRef(0);
 
-  useFrame((_, dt) => {
-    gap.current = THREE.MathUtils.damp(gap.current, explode ? 1.8 : 0, 4, dt);
-    if (!group.current) return;
+  useFrame(() => {
+    // the Scene damps the explode amount; plates follow it and shrink to thin slabs
+    const x = explodeRef.current;
+    if (!group.current || !x) return;
     group.current.children.forEach((child, f) => {
-      child.position.y = floorElevation(f) + 0.2 + f * gap.current;
+      child.position.y = floorElevation(f) + 0.2 + f * x.gap;
+      child.scale.y = x.thin;
     });
   });
 
@@ -772,7 +847,7 @@ function FloorLabel({ floor, explode, lang }: { floor: number; explode: boolean;
   const band = bandForFloor(floor);
   const s = stageForFloor(floor);
   const v = s.polygon[4]; // east corner
-  const y = floorElevation(floor) + floorHeight(floor) / 2 + (explode ? floor * 1.8 : 0);
+  const y = floorElevation(floor) + floorHeight(floor) / 2 + (explode ? floor * EXPLODE_GAP : 0);
   return (
     <Html position={[v[0] + 3, y, -v[1]]} distanceFactor={150} zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
       <div className="glass rounded-md px-2.5 py-1.5 text-[11px] leading-tight whitespace-nowrap">
@@ -1036,6 +1111,21 @@ function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage:
     anim.current = { until: performance.now() + 1600, mode };
   }, [mode, portrait]);
 
+  // Deep link /#entrance: start at street level in front of the main entrance.
+  const { camera: cam0 } = useThree();
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#entrance") return;
+    const c = controlsRef.current;
+    if (!c) return;
+    const d = entrances()[0];
+    const out = edgeOutwardNormal(stages[0].polygon, EDGE_SE);
+    c.target.set(d.e, 3, -d.n);
+    cam0.position.set(d.e + out[0] * 38, 7, -(d.n + out[1] * 38));
+    anim.current = { until: 0, mode };
+    c.update();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useFrame((st, dt) => {
     const c = controlsRef.current;
     if (!c) return;
@@ -1057,11 +1147,13 @@ function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage:
       c.update();
       return;
     }
-    c.target.x = THREE.MathUtils.damp(c.target.x, 0, 2.5, dt);
-    c.target.z = THREE.MathUtils.damp(c.target.z, 0, 2.5, dt);
-    const wantY = showGarage ? 2 : explode ? 96 : 58;
-    c.target.y = THREE.MathUtils.damp(c.target.y, wantY, 2.5, dt);
+    // Only steer the target while a mode transition is running; afterwards zoom-to-cursor
+    // may carry the target wherever the user is looking (e.g. down to the entrance).
     if (performance.now() < anim.current.until) {
+      c.target.x = THREE.MathUtils.damp(c.target.x, 0, 2.5, dt);
+      c.target.z = THREE.MathUtils.damp(c.target.z, 0, 2.5, dt);
+      const wantY = showGarage ? 2 : explode ? 96 : 58;
+      c.target.y = THREE.MathUtils.damp(c.target.y, wantY, 2.5, dt);
       const base = showGarage ? 230 : explode ? 420 : 290;
       const wantDist = base * (portrait ? 1.8 : 1);
       const dir = dirRef.current;
@@ -1168,6 +1260,12 @@ function Scene(props: SceneProps) {
   const garageOpen = showGarage || (peek && !explode && !cleaning.active);
   const [skyNight, setSkyNight] = useState(night);
   const [garageMounted, setGarageMounted] = useState(false);
+  const explodeRef = useRef({ gap: 0, thin: 1 });
+  useFrame((_, dt) => {
+    const x = explodeRef.current;
+    x.gap = THREE.MathUtils.damp(x.gap, explode ? EXPLODE_GAP : 0, 4, dt);
+    x.thin = THREE.MathUtils.damp(x.thin, explode ? 0.12 : 1, 4, dt);
+  });
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
   const dim = showTenants || explode;
   const controlsRef = useRef<ControlsLike | null>(null);
@@ -1199,8 +1297,10 @@ function Scene(props: SceneProps) {
 
       <group>
         <GlassStages night={night} dim={dim} env={env} unit={unit} />
-        <Structure visible={dim} />
-        <FloorSlices showTenants={showTenants} explode={explode} hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} interactive={!cleaning.active} />
+        <Structure visible={showTenants && !explode} />
+        <FloorSlices showTenants={showTenants} explode={explode} hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} interactive={!cleaning.active} explodeRef={explodeRef} />
+        <Interiors explodeRef={explodeRef} explode={explode} />
+        <Entrances />
         {labelFloor !== null && !cleaning.active && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
@@ -1215,7 +1315,8 @@ function Scene(props: SceneProps) {
         enabled={!cleaning.active}
         autoRotate={autoRotate && !cleaning.active}
         autoRotateSpeed={0.5}
-        minDistance={60}
+        zoomToCursor
+        minDistance={explode ? 14 : 45}
         maxDistance={600}
         maxPolarAngle={showGarage ? Math.PI * 0.64 : Math.PI * 0.495}
         target={[0, 58, 0]}
