@@ -1054,22 +1054,48 @@ function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage:
   return null;
 }
 
+/** Eases 0..1 toward the requested day/night state so lights, sky and glass cross-fade. */
+function useNightBlend(night: boolean) {
+  const [t, setT] = useState(night ? 1 : 0);
+  const ref = useRef(t);
+  useFrame((_, dt) => {
+    const next = THREE.MathUtils.damp(ref.current, night ? 1 : 0, 2.2, dt);
+    if (Math.abs(next - ref.current) > 0.002) {
+      ref.current = next;
+      setT(next);
+    } else if (ref.current !== (night ? 1 : 0) && Math.abs(next - (night ? 1 : 0)) < 0.01) {
+      ref.current = night ? 1 : 0;
+      setT(ref.current);
+    }
+  });
+  return t;
+}
+
+const mixColor = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+
 function Scene(props: SceneProps) {
   const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
   const labelFloor = selected ?? hovered;
+  const nt = useNightBlend(night);
+  // The sky swaps HDRI at the midpoint of the fade, dipping through dark so the cut is hidden.
+  const skyNight = nt >= 0.5;
+  const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2) ; // 1 at the midpoint, 0 at either end
+  const skyMix = skyNight ? 1 : 0;
+  const bgIntensity = THREE.MathUtils.lerp(0.55, 0.22, skyMix) * (1 - dip * 0.9);
+  const envIntensity = THREE.MathUtils.lerp(0.8, 0.5, skyMix) * (1 - dip * 0.6);
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
   const dim = showTenants || explode;
   const controlsRef = useRef<ControlsLike | null>(null);
-  const env = useHdri(night);
+  const env = useHdri(skyNight);
   return (
     <>
-      <fog attach="fog" args={[night ? "#070a10" : "#1a2230", 420, 1100]} />
+      <fog attach="fog" args={[mixColor("#1a2230", "#070a10", nt), 420, 1100]} />
 
-      <ambientLight intensity={night ? 0.22 : 0.5} />
+      <ambientLight intensity={THREE.MathUtils.lerp(0.5, 0.22, nt)} />
       <directionalLight
         position={[-140, 220, 120]}
-        intensity={night ? 0.45 : 2.4}
-        color={night ? "#9fb4d6" : "#fff3dd"}
+        intensity={THREE.MathUtils.lerp(2.4, 0.45, nt)}
+        color={mixColor("#fff3dd", "#9fb4d6", nt)}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-260}
@@ -1080,14 +1106,14 @@ function Scene(props: SceneProps) {
         shadow-camera-far={700}
         shadow-bias={-0.0004}
       />
-      <directionalLight position={[160, 90, -140]} intensity={night ? 0.2 : 0.6} color="#8fc9ff" />
+      <directionalLight position={[160, 90, -140]} intensity={THREE.MathUtils.lerp(0.6, 0.2, nt)} color="#8fc9ff" />
 
       <Environment
         map={env}
         background
-        backgroundBlurriness={night ? 0.08 : 0.02}
-        backgroundIntensity={night ? 0.22 : 0.55}
-        environmentIntensity={night ? 0.5 : 0.8}
+        backgroundBlurriness={skyNight ? 0.08 : 0.02}
+        backgroundIntensity={bgIntensity}
+        environmentIntensity={envIntensity}
       />
 
       <group>

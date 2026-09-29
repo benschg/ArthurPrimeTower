@@ -59,7 +59,12 @@ await wait(2000);
 await shot("04-garage");
 await click("Garage");
 await click("Night");
+await wait(350);
+await page.screenshot({ path: path.join(out, "05a-night-transition.png") });
+await page.screenshot({ path: path.join(out, "05b-toggle-mid.png"), clip: { x: 1300, y: 150, width: 140, height: 80 } });
+await wait(2500);
 await shot("05-night");
+await page.screenshot({ path: path.join(out, "05c-toggle-night.png"), clip: { x: 1300, y: 150, width: 140, height: 80 } });
 await click("Night");
 
 // hover a floor: move the mouse over the tower centre

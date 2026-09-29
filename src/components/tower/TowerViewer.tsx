@@ -7,6 +7,7 @@ import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 import { floorElevation, FLOORS, stageForFloor, TOWER_HEIGHT } from "./geometry";
+import { DayNightToggle } from "./DayNightToggle";
 import { FloorPlanSvg } from "./FloorPlanSvg";
 import { planForFloor } from "./floorPlans";
 import type { CleanState, ViewerState } from "./TowerScene";
@@ -119,7 +120,16 @@ export function TowerViewer() {
       {/* Controls */}
       <div className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
         <LangToggle className="glass mb-1" />
-        {toggleKeys.map((key) => (
+        {toggleKeys.map((key) =>
+          key === "night" ? (
+            <DayNightToggle
+              key={key}
+              night={state.night}
+              onToggle={() => !clean.active && toggle("night")}
+              label={t.toggles.night[0]}
+              hint={t.toggles.night[1]}
+            />
+          ) : (
           <button
             key={key}
             onClick={() => toggle(key)}
@@ -132,7 +142,8 @@ export function TowerViewer() {
           >
             {t.toggles[key][0]}
           </button>
-        ))}
+          ),
+        )}
       </div>
 
       {/* Floor plan panel */}
