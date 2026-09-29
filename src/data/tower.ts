@@ -1,5 +1,6 @@
 import { l, type L } from "@/i18n";
-import type { Fact, FloorBand, Plan, Source, Tenant } from "./types";
+import { profilesOnFloor } from "./tenantProfiles";
+import type { Fact, FloorBand, Plan, Source } from "./types";
 
 export const location = {
   lat: 47.38586,
@@ -119,105 +120,31 @@ export const annexes: { name: string; address: string; floors: number; height: s
   { name: "Platform", address: "Maagplatz 1", floors: 7, height: "25 m", area: "≈ 20,900 m²", text: l("Built by HRS to EY's specification with about 1,000 workplaces, a public staff restaurant, a Coop supermarket and 82 parking spaces.", "Von HRS nach den Vorgaben von EY gebaut, mit rund 1000 Arbeitsplätzen, einem öffentlichen Personalrestaurant, einem Coop-Supermarkt und 82 Parkplätzen.") },
 ];
 
-const ind = {
-  law: l("Law firm", "Anwaltskanzlei"),
-  bank: l("Banking", "Bank"),
-  wealth: l("Banking & wealth management", "Bank & Vermögensverwaltung"),
-  asset: l("Asset management", "Vermögensverwaltung"),
-  crypto: l("Digital assets (Deutsche Börse Group)", "Digitale Assets (Gruppe Deutsche Börse)"),
-  ecom: l("E-commerce tech hub", "E-Commerce-Tech-Hub"),
-  insurance: l("Industrial insurance", "Industrieversicherung"),
-  it: l("IT services", "IT-Dienstleistungen"),
-  oracle: l("IT · Smart Innovation Center", "IT · Smart Innovation Center"),
-  consulting: l("Management consulting", "Unternehmensberatung"),
-  energy: l("Energy trading", "Energiehandel"),
-  search: l("Executive search", "Kaderselektion"),
-  realestate: l("Real-estate advisory", "Immobilienberatung"),
-  iot: l("IoT & logistics tech", "IoT & Logistik-Tech"),
-  owner: l("Real estate (owner)", "Immobilien (Eigentümerin)"),
-  flex: l("Serviced offices", "Serviced Offices"),
-  hr: l("Recruitment", "Personalvermittlung"),
-  music: l("Music", "Musik"),
-  gastro: l("Restaurant · bar · conference", "Restaurant · Bar · Konferenz"),
-  bar: l("Bar", "Bar"),
-  retail: l("Convenience retail", "Convenience-Shop"),
-  commodity: l("Commodity trading", "Rohstoffhandel"),
-  audit: l("Audit & consulting", "Wirtschaftsprüfung & Beratung"),
-  super: l("Supermarket", "Supermarkt"),
-  staff: l("Public staff restaurant", "Öffentliches Personalrestaurant"),
-  childcare: l("Childcare", "Kinderkrippe"),
-  fitness: l("Fitness", "Fitness"),
-  medical: l("Medical practice", "Arztpraxis"),
-  gallery: l("Art gallery", "Kunstgalerie"),
-  popup: l("Restaurant & events", "Restaurant & Events"),
-};
+const OFFICE_COLOR = "#5c6f83";
+const LOBBY_COLOR = "#c9d6e2";
+const shortName = (name: string) => name.replace(/\s*\(.*?\)/g, "").replace(/\s+(AG|GmbH|SE)$/, "");
 
-const fl = {
-  ground: l("Ground floor", "Erdgeschoss"),
-  branch: l("Ground-floor branch", "Filiale im Erdgeschoss"),
-  whole: l("Entire building", "Ganzes Gebäude"),
-};
-
-export const tenants: Tenant[] = [
-  { name: "Homburger AG", industry: ind.law, floors: l("8 upper floors (25–32)", "8 obere Geschosse (25–32)"), building: "Prime Tower", status: "current", note: l("Anchor tenant since December 2011", "Ankermieter seit Dezember 2011"), source: "https://www.homburger.ch/en/contact" },
-  { name: "Deutsche Bank (Schweiz) AG", industry: ind.wealth, floors: l("3 floors incl. 14–15", "3 Geschosse inkl. 14–15"), building: "Prime Tower", status: "current", note: l("Reduced from 5 floors in 2021", "2021 von 5 Geschossen reduziert"), source: "https://country.db.com/switzerland/company/contacts" },
-  { name: "Citibank (Switzerland) AG", industry: ind.bank, floors: l("4 floors", "4 Geschosse"), building: "Prime Tower", status: "current", source: "https://www.citigroup.com/global/about-us/global-presence/switzerland" },
-  { name: "GAM Investments", industry: ind.asset, floors: l("1 floor", "1 Geschoss"), building: "Prime Tower", status: "current", note: l("Registered seat Hardstrasse 201", "Sitz Hardstrasse 201"), source: "https://uk.finance.yahoo.com/quote/GAM.SW/profile" },
-  { name: "Crypto Finance AG", industry: ind.crypto, floors: l("24", "24"), building: "Prime Tower", status: "current", note: l("105 workplaces, moved in 2022", "105 Arbeitsplätze, Einzug 2022"), source: "https://www.bilanz.ch/bilanz/zurich-prime-tower-zieht-neue-mieter-an-die-preise-steigen-359459" },
-  { name: "Zalando Switzerland AG", industry: ind.ecom, floors: l("23 + part of 7", "23 + Teil von 7"), building: "Prime Tower", status: "current", note: l("Floor 23 later marketed for lease; footprint uncertain", "Geschoss 23 später zur Vermietung ausgeschrieben; Fläche unsicher"), source: "https://jobs.zalando.com/en/where-we-work/zurich" },
-  { name: "HDI Global SE", industry: ind.insurance, floors: l("21", "21"), building: "Prime Tower", status: "current", source: "https://sps.swiss/en/group/real-estate/portfolio/office/prime-tower" },
-  { name: "Oracle Software (Schweiz) GmbH", industry: ind.oracle, floors: l("17", "17"), building: "Prime Tower", status: "current", note: l("Opened April 2018", "Eröffnet April 2018"), source: "https://www.netzwoche.ch/news/2018-04-18/oracle-mietet-sich-im-prime-tower-ein" },
-  { name: "Roland Berger AG", industry: ind.consulting, floors: l("1 floor", "1 Geschoss"), building: "Prime Tower", status: "current", note: l("Since January 2021", "Seit Januar 2021"), source: "https://www.primetower.ch/en/2021/03/roland-berger-ag-our-new-arrival-at-the-prime-tower/" },
-  { name: "Repower AG", industry: ind.energy, floors: l("6", "6"), building: "Prime Tower", status: "current", source: "https://repower.com/new-media/l25nsi1o/zuerich_2023_en.pdf" },
-  { name: "Korn Ferry", industry: ind.search, building: "Prime Tower", status: "current", source: "https://www.kornferry.com/about-us/global-offices/zurich" },
-  { name: "JLL (Jones Lang LaSalle) AG", industry: ind.realestate, building: "Prime Tower", status: "current" },
-  { name: "Cognizant Technology Solutions AG", industry: ind.it, building: "Prime Tower", status: "current", note: l("Swiss headquarters", "Schweizer Hauptsitz") },
-  { name: "Nexxiot AG", industry: ind.iot, building: "Prime Tower", status: "current", note: l("Headquarters", "Hauptsitz") },
-  { name: "Swiss Prime Site Immobilien AG", industry: ind.owner, building: "Prime Tower", status: "current", source: "https://sps.swiss/en/contact/immobilien" },
-  { name: "FlexOffice (Schweiz) AG", industry: ind.flex, floors: l("7", "7"), building: "Prime Tower", status: "current", source: "https://flexoffice.swiss/en/location/zurich-prime-tower/" },
-  { name: "Humanis AG", industry: ind.hr, building: "Prime Tower", status: "current" },
-  { name: "schilling partners ag", industry: ind.search, building: "Prime Tower", status: "current" },
-  { name: "Universal Music Group (Switzerland)", industry: ind.music, building: "Prime Tower", status: "current", note: l("Listed by primetower.ch; not independently verified", "Auf primetower.ch gelistet; nicht unabhängig bestätigt") },
-  { name: "Clouds", industry: ind.gastro, floors: l("34–35", "34–35"), building: "Prime Tower", status: "current", note: l("Opened 12 Dec 2011, run by Candrian", "Eröffnet am 12. Dez. 2011, betrieben von Candrian"), source: "https://clouds.ch/en/" },
-  { name: "Hotel Rivington & Sons", industry: ind.bar, floors: fl.ground, building: "Prime Tower", status: "current" },
-  { name: "Zürcher Kantonalbank", industry: ind.bank, floors: fl.branch, building: "Prime Tower", status: "current", note: l("Asset-management floors vacated in 2020", "Asset-Management-Geschosse 2020 geräumt"), source: "https://www.zkb.ch/de/standorte/zuerich-primetower.html" },
-  { name: "Migrolino", industry: ind.retail, floors: fl.ground, building: "Prime Tower", status: "current" },
-  { name: "Infosys", industry: ind.it, building: "Prime Tower", status: "former", note: l("Opening tenant 2011; moved to The Circle in January 2026", "Erstmieter 2011; Umzug in The Circle im Januar 2026") },
-  { name: "Transammonia / Trammo AG", industry: ind.commodity, building: "Prime Tower", status: "former", note: l("Opening tenant 2011; presence today unclear", "Erstmieter 2011; heutige Präsenz unklar") },
-  { name: "Swiss & Global Asset Management", industry: ind.asset, building: "Prime Tower", status: "former", note: l("Opening tenant 2011, later merged into GAM", "Erstmieter 2011, später in GAM aufgegangen") },
-  { name: "EY (Ernst & Young AG)", industry: ind.audit, floors: fl.whole, building: "Platform", status: "current", source: "https://www.ey.com/en_ch/legal-and-privacy/company-information" },
-  { name: "Coop", industry: ind.super, floors: fl.ground, building: "Platform", status: "current" },
-  { name: "EY Restaurant platform (ZFV)", industry: ind.staff, floors: fl.ground, building: "Platform", status: "current" },
-  { name: "Coop Pronto", industry: ind.retail, floors: fl.ground, building: "Cubus", status: "current" },
-  { name: "kids & co Prime Tower", industry: ind.childcare, building: "Cubus", status: "current" },
-  { name: "Kieser Training", industry: ind.fitness, building: "Cubus", status: "current" },
-  { name: "Dr. Semm AG", industry: ind.medical, building: "Cubus", status: "current" },
-  { name: "Galerie Eva Presenhuber", industry: ind.gallery, floors: l("2–4", "2–4"), building: "Diagonal", status: "current", source: "https://www.presenhuber.com/about" },
-  { name: "Galerie Peter Kilchmann", industry: ind.gallery, floors: l("2–4", "2–4"), building: "Diagonal", status: "current" },
-  { name: "Moyo / Ooki pop-up", industry: ind.popup, floors: l("Ground + 1", "EG + 1"), building: "Diagonal", status: "current" },
-];
-
-/** Floor bands drawn in the 3D model. Floor numbers are above-ground storeys (0 = ground). */
-export const floorBands: FloorBand[] = [
-  { from: 0, to: 0, label: l("Lobby · ZKB branch · Rivington & Sons · Migrolino", "Lobby · ZKB-Filiale · Rivington & Sons · Migrolino"), color: "#c9d6e2" },
-  { from: 1, to: 5, label: l("Offices (multi-tenant)", "Büros (mehrere Mieter)"), color: "#5c6f83" },
-  { from: 6, to: 6, label: l("Repower", "Repower"), tenant: "Repower AG", color: "#e0a458" },
-  { from: 7, to: 7, label: l("FlexOffice · Zalando (part)", "FlexOffice · Zalando (Teil)"), tenant: "FlexOffice", color: "#f2c14e" },
-  { from: 8, to: 12, label: l("Offices (Citibank, GAM, Roland Berger, others)", "Büros (Citibank, GAM, Roland Berger, weitere)"), color: "#5c6f83" },
-  { from: 13, to: 13, label: l("Deutsche Bank (safes, historic)", "Deutsche Bank (Tresore, historisch)"), tenant: "Deutsche Bank", color: "#4f8fd6" },
-  { from: 14, to: 15, label: l("Deutsche Bank", "Deutsche Bank"), tenant: "Deutsche Bank", color: "#4f8fd6" },
-  { from: 16, to: 16, label: l("Offices", "Büros"), color: "#5c6f83" },
-  { from: 17, to: 17, label: l("Oracle Smart Innovation Center", "Oracle Smart Innovation Center"), tenant: "Oracle", color: "#e25c4a" },
-  { from: 18, to: 20, label: l("Offices", "Büros"), color: "#5c6f83" },
-  { from: 21, to: 21, label: l("HDI Global", "HDI Global"), tenant: "HDI Global", color: "#7bb661" },
-  { from: 22, to: 22, label: l("Offices", "Büros"), color: "#5c6f83" },
-  { from: 23, to: 23, label: l("Zalando", "Zalando"), tenant: "Zalando", color: "#ff6900" },
-  { from: 24, to: 24, label: l("Crypto Finance", "Crypto Finance"), tenant: "Crypto Finance", color: "#a78bfa" },
-  { from: 25, to: 32, label: l("Homburger AG", "Homburger AG"), tenant: "Homburger", color: "#7dd3c0" },
-  { from: 33, to: 33, label: l("Deutsche Bank client advisory (historic) · offices", "Deutsche Bank Kundenberatung (historisch) · Büros"), color: "#5c6f83" },
-  { from: 34, to: 34, label: l("Clouds Conference Center", "Clouds Konferenzzentrum"), tenant: "Clouds", color: "#f7f1e3" },
-  { from: 35, to: 35, label: l("Clouds Restaurant · Bar · Lounge", "Clouds Restaurant · Bar · Lounge"), tenant: "Clouds", color: "#ffffff" },
-];
+/**
+ * Floor colouring for the 3D model, generated from the researched tenant list
+ * (src/data/tenantProfiles.ts). Floors without a sourced tenant are multi-tenant offices.
+ */
+export const floorBands: FloorBand[] = (() => {
+  const bands: FloorBand[] = [];
+  for (let f = 0; f <= 35; f++) {
+    const here = profilesOnFloor(f);
+    const names = here.map((p) => shortName(p.name)).join(" · ");
+    let band: FloorBand;
+    if (f === 0) band = { from: 0, to: 0, label: l(`Lobby · ${names}`, `Lobby · ${names}`), color: LOBBY_COLOR };
+    else if (here.length) band = { from: f, to: f, label: l(names, names), tenant: here[0].name, color: here[0].color ?? OFFICE_COLOR };
+    // Clouds' event level: named by the operator, but no source confirms the floor number.
+    else if (f === 34) band = { from: f, to: f, label: l("Clouds events (level not confirmed)", "Clouds Events (Geschoss unbestätigt)"), color: "#f7f1e3" };
+    else band = { from: f, to: f, label: l("Offices (multi-tenant)", "Büros (mehrere Mieter)"), color: OFFICE_COLOR };
+    const prev = bands[bands.length - 1];
+    if (prev && prev.to === f - 1 && prev.label.en === band.label.en) prev.to = f;
+    else bands.push(band);
+  }
+  return bands;
+})();
 
 export const sources: Source[] = [
   { title: "Gigon/Guyer – Prime Tower project page", url: "https://www.gigon-guyer.ch/en/projects/prime-tower/" },

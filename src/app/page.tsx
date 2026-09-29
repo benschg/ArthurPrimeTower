@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FactGrid } from "@/components/FactGrid";
 import { Gallery } from "@/components/Gallery";
 import { MapEmbed } from "@/components/MapEmbed";
@@ -7,8 +8,8 @@ import { Section } from "@/components/Section";
 import { TenantList } from "@/components/TenantList";
 import { TowerViewer } from "@/components/tower/TowerViewer";
 import { photos } from "@/data/photos";
-import { annexes, architecture, facts, garage, heroFacts, location, plans, sources, tenants, timeline } from "@/data/tower";
-import { pick } from "@/i18n";
+import { annexes, architecture, facts, garage, heroFacts, location, plans, sources, timeline } from "@/data/tower";
+import { l, pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 
@@ -82,7 +83,19 @@ export default function Home() {
       </Section>
 
       <Section id="tenants" eyebrow={s.tenants.eyebrow} title={s.tenants.title} intro={s.tenants.intro}>
-        <TenantList tenants={tenants} lang={lang} />
+        <Link
+          href="/tenants"
+          className="group mb-8 flex items-center justify-between gap-4 rounded-2xl border border-accent/40 bg-accent/5 px-5 py-4 hover:border-accent hover:bg-accent/10 transition-colors"
+        >
+          <span>
+            <span className="block font-semibold group-hover:text-accent">{pick(l("Explore all companies", "Alle Firmen entdecken"), lang)}</span>
+            <span className="block text-sm text-muted">
+              {pick(l("Profiles, logos, floors and sources for every tenant on the site.", "Profile, Logos, Geschosse und Quellen zu jeder Firma auf dem Areal."), lang)}
+            </span>
+          </span>
+          <span className="font-mono text-accent text-lg">→</span>
+        </Link>
+        <TenantList lang={lang} />
       </Section>
 
       <Section id="garage" eyebrow={s.garage.eyebrow} title={s.garage.title} intro={s.garage.intro}>

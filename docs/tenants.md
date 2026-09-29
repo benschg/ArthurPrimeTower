@@ -4,6 +4,8 @@ Hardstrasse 201, 8005 Zürich · researched 29 September 2026
 
 The official tenant directory on primetower.ch lists about 40 names for the whole Maag site without saying which building or floor. Floor numbers below come from press reports (Bilanz/Handelszeitung, January 2022; Inside Paradeplatz; Netzwoche), company websites and fit-out references. Swiss Prime Site last published a count in January 2022: 35 tenants on the site, 26 in the tower itself. Treat floor assignments as approximate and check the source before relying on one.
 
+Company profiles, the corrections below and sources are in [tenant-profiles.md](tenant-profiles.md). Logos and feature images are in `public/tenants/`.
+
 ## Prime Tower (36 floors)
 
 ### Office tenants
@@ -21,35 +23,35 @@ The official tenant directory on primetower.ch lists about 40 names for the whol
 | Roland Berger AG | Management consulting | 1 floor, about 70 staff | Since January 2021 | [primetower.ch](https://www.primetower.ch/en/2021/03/roland-berger-ag-our-new-arrival-at-the-prime-tower/) |
 | Repower AG, Zurich office | Energy trading | Reception on 6 | Current (2023 location sheet) | [Repower PDF](https://repower.com/new-media/l25nsi1o/zuerich_2023_en.pdf) |
 | Korn Ferry International | Executive search | not published | Current | [kornferry.com](https://www.kornferry.com/about-us/global-offices/zurich) |
-| Jones Lang LaSalle (JLL) AG | Real-estate advisory, also the tower's letting agent | not published | Current (job ads 2019–2025) | [myjob.ch listing](https://www.myjob.ch/job/head-of-leasing-advisory-switzerland/3224592) |
-| Cognizant Technology Solutions AG | IT services, Swiss headquarters | not published | Current | [itreseller.ch](https://www.itreseller.ch/unternehmen/668/Cognizant_Technology_Solutions_AG.html) |
-| Nexxiot AG | IoT and logistics technology, headquarters | not published | Current | [railmarket.com](https://railmarket.com/am/profile/nexxiot-ag) |
+| Jones Lang LaSalle (JLL) AG | Real-estate advisory, also the tower's letting agent | 13 (expanded 2022) | Since November 2011 | [myjob.ch listing](https://www.myjob.ch/job/head-of-leasing-advisory-switzerland/3224592) |
+| Cognizant Technology Solutions AG | IT services, Zurich office (legal seat Baar) | 18 | Since 2017 | [itreseller.ch](https://www.itreseller.ch/unternehmen/668/Cognizant_Technology_Solutions_AG.html) |
+| Nexxiot AG | IoT and logistics technology, headquarters | not published | Moved out; now Nordstrasse 15, 8006 Zürich (register and website, 2026) | [railmarket.com](https://railmarket.com/am/profile/nexxiot-ag) |
 | Swiss Prime Site Immobilien AG / SPS Solutions AG | Real estate (owner's Zurich office) | Gave half a floor to Zalando in 2022 | Current | [sps.swiss](https://sps.swiss/en/contact/immobilien) |
-| FlexOffice (Schweiz) AG | Serviced offices and coworking | 7 (100 m² open space plus team offices) | Current | [flexoffice.swiss](https://flexoffice.swiss/en/location/zurich-prime-tower/) |
+| FlexOffice (Schweiz) AG | Serviced offices and coworking | 3 and 4 | Since March 2023 | [flexoffice.swiss](https://flexoffice.swiss/en/location/zurich-prime-tower/) |
 | Humanis AG | Recruitment | not published | Current | [jobs.ch listing](https://www.jobs.ch/en/vacancies/detail/a5171177-95dd-4337-bfa5-4b467eaac1e0/) |
 | schilling partners ag (formerly Guido Schilling AG) | Executive search | not published | Current | [schillingpartners.ch](https://www.schillingpartners.ch/de/ueber-uns/guido-schilling/) |
 | Universal Music Group (Switzerland) | Music | not published | On the primetower.ch list; not independently confirmed | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
 | A-Connect | Consulting | not published | On the primetower.ch list only | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
 | Assess + Perform AG | Consulting | not published | On the primetower.ch list only | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
 | Credit Exchange AG | Mortgage marketplace | not published | On the primetower.ch list only | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
-| Equans Switzerland FM AG | Facility management (also runs reception and building services) | not published | On the primetower.ch list | [primetower.ch services](https://www.primetower.ch/services/) |
-| Trammo AG / Trammochem (ex-Transammonia) | Commodity trading | not published | Opening tenant 2011; LEI record still gives Hardstrasse 201, not on the current directory. Uncertain | [LEI record](https://lei.bloomberg.com/leis/view/549300R1PXZV302EWZ10) |
+| Equans Switzerland FM AG | Facility management (also runs reception and building services) | not published | On-site service provider; no lease registered at Hardstrasse 201 | [primetower.ch services](https://www.primetower.ch/services/) |
+| Trammo AG / Trammochem (ex-Transammonia) | Commodity trading | not published | Opening tenant 2011; Trammochem AG deleted 2013, successor Trammo GmbH is in Altendorf SZ. Gone | [LEI record](https://lei.bloomberg.com/leis/view/549300R1PXZV302EWZ10) |
 
 ### Ground floor, top floors and services
 
 | Company | Business | Where | Status | Source |
 |---|---|---|---|---|
-| Clouds (Candrian Catering) | Restaurant, bistro, bar, lounge, smokers' lounge, two patios | 35; private conference floor on 34 | Opened 12 December 2011; conference centre 2 January 2012 | [clouds.ch](https://clouds.ch/en/) |
+| Clouds (Candrian Catering) | Restaurant, bistro, bar, lounge, smokers' lounge, two patios | 35 (a separate conference floor on 34 is not confirmed) | Opened 12 December 2011; conference centre 2 January 2012 | [clouds.ch](https://clouds.ch/en/) |
 | Zürcher Kantonalbank | Bank branch | Ground floor | Branch current; the asset-management floors (about 250 staff) moved to the Steinfels building by 2020 | [zkb.ch](https://www.zkb.ch/de/standorte/zuerich-primetower.html) |
-| Hotel Rivington & Sons | Bar | Ground floor | Current | [zuerich.com](https://www.zuerich.com/en/visit/bars-lounges/hotel-rivington-sons) |
-| Migrolino | Convenience shop | Ground floor (listed under retail; exact unit unverified) | Current | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
+| Hotel Rivington & Sons | Bar and café | Ground floor | Current | [rivington.ch](https://rivington.ch) |
+| Migrolino | Convenience shop | Cubus, Hardstrasse 221 (not in the tower) | Current | [primetower.ch directory](https://www.primetower.ch/en/business-en/) |
 | Wincasa AG | Site management on behalf of Swiss Prime Site | Site office | Current; contact for an authoritative tenant list: info@primetower.ch, +41 44 843 13 37 | [primetower.ch](https://www.primetower.ch/) |
 
 ### Former tenants
 
 | Company | Business | Notes | Source |
 |---|---|---|---|
-| Infosys | IT services | Opening tenant 2011; Swiss headquarters moved to The Circle at Zurich Airport in January 2026 | [Netzwoche, Jan 2026](https://www.netzwoche.ch/news/2026-01-26/infosys-eroeffnet-buero-in-zuerich) |
+| Infosys | IT services | Listed as an opening tenant 2011, but no source names a Prime Tower address; Swiss headquarters opened at The Circle, Zurich Airport, in January 2026 | [Netzwoche, Jan 2026](https://www.netzwoche.ch/news/2026-01-26/infosys-eroeffnet-buero-in-zuerich) |
 | Swiss & Global Asset Management | Asset management | Opening tenant 2011; later merged into GAM | [Wikipedia](https://en.wikipedia.org/wiki/Prime_Tower) |
 | Zürcher Kantonalbank Asset Management | Asset management | Several upper floors until 2020, see above | [finews.ch](https://www.finews.ch/news/banken/28925-zkb-zuercher-kantonalbank-sonnenbuehl-duebendorf-hard-steinfels-swiss-prime-tower) |
 

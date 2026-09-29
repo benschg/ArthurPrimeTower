@@ -7,16 +7,6 @@ export type Fact = {
   source?: string;
 };
 
-export type Tenant = {
-  name: string;
-  industry: L;
-  floors?: L;
-  building: "Prime Tower" | "Cubus" | "Diagonal" | "Platform";
-  status: "current" | "former";
-  note?: L;
-  source?: string;
-};
-
 export type Photo = {
   file: string; // path under /public/photos
   title: string;

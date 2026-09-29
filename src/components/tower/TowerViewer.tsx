@@ -2,7 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { floorBands, tenants } from "@/data/tower";
+import Image from "next/image";
+import Link from "next/link";
+import { tenantAssetBySlug } from "@/data/tenantAssets";
+import { categoryLabel, profilesOnFloor } from "@/data/tenantProfiles";
+import { floorBands } from "@/data/tower";
 import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
@@ -93,10 +97,7 @@ export function TowerViewer() {
 
   const focus = state.cleaning.active ? null : (state.selected ?? state.hovered);
   const band = focus === null ? null : floorBands.find((b) => focus >= b.from && focus <= b.to);
-  const tenantsOnFloor = useMemo(() => {
-    if (!band?.tenant) return [];
-    return tenants.filter((x) => x.building === "Prime Tower" && x.name.toLowerCase().includes(band.tenant!.toLowerCase()));
-  }, [band]);
+  const tenantsOnFloor = useMemo(() => (focus === null ? [] : profilesOnFloor(focus)), [focus]);
 
   const clean = state.cleaning;
   const success = clean.active && clean.progress >= 0.99;
@@ -214,12 +215,30 @@ export function TowerViewer() {
             </p>
             <p className="mt-1 text-base font-medium leading-snug">{band ? pick(band.label, lang) : t.offices}</p>
             <p className="mt-1 text-[11px] text-muted">{pick(stageForFloor(focus).label, lang)}</p>
-            {tenantsOnFloor.map((x) => (
-              <p key={x.name} className="mt-2 text-xs text-muted">
-                <span className="text-paper">{x.name}</span> · {pick(x.industry, lang)}
-                {x.note ? ` · ${pick(x.note, lang)}` : ""}
-              </p>
-            ))}
+            {tenantsOnFloor.length > 0 && (
+              <ul className="mt-3 space-y-2 pointer-events-auto">
+                {tenantsOnFloor.map((p) => {
+                  const icon = tenantAssetBySlug[p.slug]?.icon;
+                  return (
+                    <li key={p.slug}>
+                      <Link href={`/tenants#${p.slug}`} className="group flex items-center gap-2.5 rounded-lg -mx-1 px-1 py-1 hover:bg-paper/5">
+                        {icon && (
+                          <Image src={`/tenants/${icon}`} alt="" width={32} height={32} className="shrink-0 rounded-md bg-white object-contain" style={{ width: 32, height: 32 }} />
+                        )}
+                        <span className="min-w-0">
+                          <span className="block text-sm text-paper leading-tight group-hover:text-accent truncate">{p.name}</span>
+                          <span className="block text-[11px] text-muted leading-tight truncate">
+                            {pick(categoryLabel[p.category], lang)}
+                            {p.floorsLabel ? ` · ${pick(p.floorsLabel, lang)}` : ""}
+                          </span>
+                        </span>
+                        <span className="ml-auto text-muted group-hover:text-accent">→</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </>
         )}
       </div>
