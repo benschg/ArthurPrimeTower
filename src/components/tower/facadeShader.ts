@@ -116,13 +116,18 @@ vec3 interior(vec3 ro, vec3 rd, float floorIdx, float roomH, out float lit) {
   float t = min(min(tFar.x, tFar.y), tFar.z);
   vec3 p = ro + rd * t;
   bool desk = false;
+  // On-screen footprint of the hit surface (metres per pixel). Hard interior patterns are
+  // faded to their mean once they drop below a few pixels, which stops them shimmering on
+  // the upper floors seen at grazing angles. Computed here, before any divergent branch.
+  float foot = max(fwidth(p.x), fwidth(p.z));
+  float detail = 1.0 - smoothstep(0.12, 0.5, foot);
 
   // desks: tops at 0.75 m in two rows parallel to the glass
   float tDesk = (0.75 - ro.y) * inv.y;
   if (rd.y < 0.0 && tDesk > 0.0 && tDesk < t) {
     vec3 q = ro + rd * tDesk;
     float row = step(1.3, q.z) * step(q.z, 2.9) + step(4.2, q.z) * step(q.z, 5.8);
-    float seg = step(0.15, fract((q.x + h * 3.0) / 1.7));
+    float seg = detail > 0.5 ? step(0.15, fract((q.x + h * 3.0) / 1.7)) : 1.0;
     if (row * seg > 0.5) { t = tDesk; p = q; desk = true; }
   }
 
@@ -136,6 +141,7 @@ vec3 interior(vec3 ro, vec3 rd, float floorIdx, float roomH, out float lit) {
     albedo = vec3(0.55); // ceiling with light panels
     vec2 c = fract(vec2(p.x / 1.5, p.z / 1.8));
     float panel = step(0.25, c.x) * step(c.x, 0.75) * step(0.2, c.y) * step(c.y, 0.8);
+    panel = mix(0.3, panel, detail); // 0.3 = mean coverage of the panel grid
     emit = panel * lit * mix(1.2, 6.0, uNight);
   } else if (t == tFar.z) {
     // back wall toward the core, sometimes an accent colour, a dark door now and then
@@ -205,7 +211,8 @@ void main() {
   float bh = hash12(paneId + 41.0);
   float blindTo = roomH * (1.0 - (bh - 0.72) * 3.2);
   float blind = step(0.72, bh) * step(blindTo, v) * (1.0 - step(roomH, v));
-  float slat = 0.85 + 0.15 * step(0.5, fract(v / 0.08));
+  float slatHard = 0.85 + 0.15 * step(0.5, fract(v / 0.08));
+  float slat = mix(0.925, slatHard, 1.0 - smoothstep(0.015, 0.06, fwidth(v))); // 8 cm slats alias fast
   vec3 blindCol = vec3(0.5, 0.49, 0.46) * slat * ((1.0 - uNight) * 0.35 + lit * mix(0.25, 0.6, uNight));
   room = mix(room, blindCol, blind);
 

@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import type { FacadeMaterial } from "../facadeShader";
 import type { ExtractState } from "../Interiors";
 import { FLOORS, floorHeight, floorElevation, stageForFloor } from "../geometry";
-import { extrudeUp, liftAbove } from "./helpers";
+import { liftAbove, extrudeUp } from "./helpers";
 import type { UnitProps } from "./types";
 import { MaintenanceUnit } from "./maintenance";
 import { Roof } from "./roof";
@@ -30,38 +30,22 @@ export function GlassStages({
 }) {
   const roofRef = useRef<THREE.Group>(null);
   const ringsRef = useRef<THREE.Group>(null);
-  // Per-ring opacity factor (1 = normal). A pulled-out floor's ring fades away so the plate
-  // does not clip through it; applied per draw via onBeforeRender on the shared material.
-  const fades = useRef<Float32Array>(new Float32Array(FLOORS).fill(1));
-  const ringRef = (f: number) => (m: THREE.Mesh | null) => {
-    if (!m) return;
-    m.onBeforeRender = () => {
-      const mat = m.material as FacadeMaterial;
-      const fade = fades.current[f];
-      if (fade < 0.999) {
-        mat.userData.savedOpacity = mat.uniforms.uOpacity.value;
-        mat.userData.savedDepth = mat.depthWrite;
-        mat.uniforms.uOpacity.value *= fade;
-        mat.depthWrite = false;
-      }
-    };
-    m.onAfterRender = () => {
-      const mat = m.material as FacadeMaterial;
-      if (mat.userData.savedOpacity !== undefined) {
-        mat.uniforms.uOpacity.value = mat.userData.savedOpacity;
-        mat.depthWrite = mat.userData.savedDepth;
-        delete mat.userData.savedOpacity;
-        delete mat.userData.savedDepth;
-      }
-    };
-  };
+  // A pulled-out floor's ring fades away so the plate does not clip through it. Faded rings
+  // get their own material clone (uniforms synced from the shared one each frame): a shared
+  // material's uniforms are only re-uploaded when the material changes between draws, so a
+  // per-object tweak would be skipped or leak onto neighbouring rings.
+  const fadeMats = useRef<FacadeMaterial[] | null>(null);
+  // The shared material is reached through the first ring so it is mutated as a scene
+  // object, not as a memoised value.
+  const mat = () => (ringsRef.current?.children[0] as THREE.Mesh | undefined)?.material as FacadeMaterial | undefined;
   // One shared facade material; one glass ring per floor so the stack can open and explode.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- env swaps via the uniform below
   const material = useMemo(() => createFacadeMaterial(env), []);
   const rings = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
-        const g = extrudeUp(stageForFloor(f).polygon, floorHeight(f));
+        // closed ring, 1.5 cm short so the caps of stacked rings never share a plane (no z-fighting)
+        const g = extrudeUp(stageForFloor(f).polygon, floorHeight(f) - 0.015);
         // floor index and height: the shader's interior mapping and per-pane variation key on them
         const n = g.attributes.position.count;
         const a = new Float32Array(n * 2);
@@ -74,7 +58,6 @@ export function GlassStages({
       }),
     [],
   );
-  const mat = () => (ringsRef.current?.children[0] as THREE.Mesh | undefined)?.material as FacadeMaterial | undefined;
 
   useEffect(() => {
     const m = mat();
@@ -94,15 +77,45 @@ export function GlassStages({
     const prev = outgoingRef.current;
     if (!ex || !prev) return;
     if (roofRef.current) roofRef.current.position.y = (FLOORS - 1) * gap + liftAbove(FLOORS, ex, prev);
-    const fadeOf = (t: number) => 1 - THREE.MathUtils.smoothstep(t, 0, 0.35);
-    if (ringsRef.current) {
-      ringsRef.current.children.forEach((ring, f) => {
-        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev);
-        fades.current[f] = f === ex.floor ? fadeOf(ex.t) : f === prev.floor ? fadeOf(prev.t) : 1;
-      });
-    }
     const m = mat();
     if (!m) return;
+    if (!fadeMats.current) {
+      fadeMats.current = [0, 1].map(() => {
+        const c = m.clone() as FacadeMaterial;
+        c.depthWrite = false;
+        return c;
+      });
+    }
+    const syncClone = (c: FacadeMaterial, fade: number) => {
+      for (const key in m.uniforms) {
+        const v = m.uniforms[key].value;
+        const target = c.uniforms[key];
+        if (!target) continue;
+        if (v && typeof v === "object" && "copy" in v && !("isTexture" in v)) (target.value as { copy: (x: unknown) => void }).copy(v);
+        else target.value = v;
+      }
+      c.uniforms.uOpacity.value = m.uniforms.uOpacity.value * fade;
+      if (c.defines.CUBEUV_TEXEL_HEIGHT !== m.defines.CUBEUV_TEXEL_HEIGHT) {
+        c.defines = { ...m.defines };
+        c.needsUpdate = true;
+      }
+    };
+    const fadeOf = (t: number) => 1 - THREE.MathUtils.smoothstep(t, 0, 0.35);
+    if (ringsRef.current) {
+      ringsRef.current.children.forEach((child, f) => {
+        const ring = child as THREE.Mesh;
+        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev);
+        const slot = f === ex.floor ? 0 : f === prev.floor ? 1 : -1;
+        const fade = slot === 0 ? fadeOf(ex.t) : slot === 1 ? fadeOf(prev.t) : 1;
+        if (slot >= 0 && fade < 0.999) {
+          const c = fadeMats.current![slot];
+          syncClone(c, fade);
+          if (ring.material !== c) ring.material = c;
+        } else if (ring.material !== m) {
+          ring.material = m;
+        }
+      });
+    }
     const u = m.uniforms;
     u.uNight.value = THREE.MathUtils.damp(u.uNight.value, night ? 1 : 0, 3, dt);
     u.uOpacity.value = THREE.MathUtils.damp(u.uOpacity.value, dim ? 0.14 : 1, 6, dt);
@@ -116,7 +129,7 @@ export function GlassStages({
     <group>
       <group ref={ringsRef}>
         {rings.map((g, f) => (
-          <mesh key={f} ref={ringRef(f)} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
+          <mesh key={f} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
         ))}
       </group>
       {/* the roof and the cradle ride up with the exploded stack */}
