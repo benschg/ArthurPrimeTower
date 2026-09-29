@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { useMemo, useRef, type RefObject } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { pick, type Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
@@ -40,12 +40,36 @@ export function FloorSlices({
   explodeRef,
   extractRef,
   outgoingRef,
+  onPlateDrag,
+  onPlateZoom,
 }: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & {
   interactive: boolean;
   explodeRef: RefObject<{ gap: number; thin: number }>;
   extractRef: RefObject<ExtractState>;
   outgoingRef: RefObject<ExtractState>;
+  onPlateDrag: (dx: number, dy: number) => void;
+  onPlateZoom: (factor: number) => void;
 }) {
+  // Interaction on the pulled-out plate: drag turns/tilts it, wheel zooms it. The events are
+  // stopped before OrbitControls sees them so the camera stays put.
+  const drag = useRef({ active: false, x: 0, y: 0, moved: 0 });
+  const hoverPlate = useRef(false);
+  const gl = useThree((st) => st.gl);
+  const isBound = (f: number) => {
+    const ex = extractRef.current;
+    return !!ex && ex.floor === f && ex.t > 0.9;
+  };
+  useEffect(() => {
+    const el = gl.domElement;
+    const onWheel = (e: WheelEvent) => {
+      if (!hoverPlate.current) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onPlateZoom(Math.exp(-e.deltaY * 0.0012));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [gl, onPlateZoom]);
   const geos = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
@@ -92,10 +116,41 @@ export function FloorSlices({
             onPointerOver={(e) => {
               e.stopPropagation();
               onHover(f);
+              if (isBound(f)) hoverPlate.current = true;
             }}
-            onPointerOut={() => onHover(null)}
+            onPointerOut={() => {
+              onHover(null);
+              if (isBound(f)) hoverPlate.current = false;
+            }}
+            onPointerDown={(e) => {
+              if (!isBound(f)) return;
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation();
+              (e.target as Element | undefined)?.setPointerCapture?.(e.pointerId);
+              drag.current = { active: true, x: e.nativeEvent.clientX, y: e.nativeEvent.clientY, moved: 0 };
+            }}
+            onPointerMove={(e) => {
+              const d = drag.current;
+              if (!d.active) return;
+              const dx = e.nativeEvent.clientX - d.x;
+              const dy = e.nativeEvent.clientY - d.y;
+              d.x = e.nativeEvent.clientX;
+              d.y = e.nativeEvent.clientY;
+              d.moved += Math.abs(dx) + Math.abs(dy);
+              onPlateDrag(dx, dy);
+            }}
+            onPointerUp={(e) => {
+              if (!drag.current.active) return;
+              drag.current.active = false;
+              (e.target as Element | undefined)?.releasePointerCapture?.(e.pointerId);
+            }}
             onClick={(e) => {
               e.stopPropagation();
+              // a drag on the pulled-out plate is not a click
+              if (drag.current.moved > 4) {
+                drag.current.moved = 0;
+                return;
+              }
               onSelect(selected === f ? null : f);
             }}
             castShadow={explode}

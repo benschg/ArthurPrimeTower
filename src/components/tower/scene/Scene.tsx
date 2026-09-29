@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
-import { Interiors, PLATE_LIFT, type ExtractState } from "../Interiors";
+import { Interiors, PLATE_LIFT, type ExtractState, PLATE_TILT } from "../Interiors";
 import { floorElevation } from "../geometry";
 import { EXPLODE_GAP, AX_X, AX_Y, PLATE_YAW, type ControlsLike } from "./helpers";
 import type { SceneProps, UnitProps } from "./types";
@@ -23,9 +23,19 @@ export function Scene(props: SceneProps) {
   const [skyNight, setSkyNight] = useState(night);
   const [garageMounted, setGarageMounted] = useState(false);
   const explodeRef = useRef({ gap: 0, thin: 1 });
-  const extractRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion() });
+  const extractRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), spin: 0, tilt: PLATE_TILT, zoom: 1 });
   // The floor on its way back in while a newly selected one comes out.
-  const outgoingRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion() });
+  const outgoingRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), spin: 0, tilt: PLATE_TILT, zoom: 1 });
+  // Dragging on the pulled-out floor turns and tilts it; the wheel over it zooms it.
+  const onPlateDrag = useCallback((dx: number, dy: number) => {
+    const ex = extractRef.current;
+    ex.spin += dx * 0.008;
+    ex.tilt = THREE.MathUtils.clamp(ex.tilt + dy * 0.004, 0.3, 1.5);
+  }, []);
+  const onPlateZoom = useCallback((factor: number) => {
+    const ex = extractRef.current;
+    ex.zoom = THREE.MathUtils.clamp(ex.zoom * factor, 0.55, 2.6);
+  }, []);
   const [interiorsActive, setInteriorsActive] = useState(false);
   const bind = useRef({ pos: new THREE.Vector3(), quat: new THREE.Quaternion(), q1: new THREE.Quaternion(), q2: new THREE.Quaternion(), rest: new THREE.Vector3(), off: new THREE.Vector3() });
   useFrame((st, dt) => {
@@ -44,11 +54,22 @@ export function Scene(props: SceneProps) {
       prev.open = ex.open;
       prev.pos.copy(ex.pos);
       prev.quat.copy(ex.quat);
+      prev.spin = ex.spin;
+      prev.tilt = ex.tilt;
+      prev.zoom = ex.zoom;
       ex.floor = selected;
       ex.t = 0;
       ex.open = 0;
+      ex.spin = 0;
+      ex.tilt = PLATE_TILT;
+      ex.zoom = 1;
     }
-    if (sel && ex.floor < 0) ex.floor = selected;
+    if (sel && ex.floor < 0) {
+      ex.floor = selected;
+      ex.spin = 0;
+      ex.tilt = PLATE_TILT;
+      ex.zoom = 1;
+    }
     // Current: open the stack above the floor, then pop the plate out; reverse on release.
     ex.open = THREE.MathUtils.damp(ex.open, sel ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
     ex.t = THREE.MathUtils.damp(ex.t, sel && ex.open > 0.55 ? 1 : 0, 3.5, dt);
@@ -80,10 +101,10 @@ export function Scene(props: SceneProps) {
       const dist = size.height > size.width ? 150 : 112;
       const right = size.height > size.width ? 0 : 44;
       const up = size.height > size.width ? -38 : -6;
-      b.off.set(right, up, -dist).applyQuaternion(cam.quaternion);
+      b.off.set(right, up, -dist).multiplyScalar(1 / e.zoom).applyQuaternion(cam.quaternion);
       b.pos.copy(cam.position).add(b.off);
-      b.q1.setFromAxisAngle(AX_X, 0.95);
-      b.q2.setFromAxisAngle(AX_Y, PLATE_YAW);
+      b.q1.setFromAxisAngle(AX_X, e.tilt);
+      b.q2.setFromAxisAngle(AX_Y, PLATE_YAW + e.spin);
       b.quat.copy(cam.quaternion).multiply(b.q1).multiply(b.q2);
       // Blend slot -> camera pose with the (already damped) pop-out amount. No extra lag:
       // once fully out the plate is rigidly linked to the camera.
@@ -142,6 +163,8 @@ export function Scene(props: SceneProps) {
           interactive={!cleaning.active}
           explodeRef={explodeRef}
           extractRef={extractRef} outgoingRef={outgoingRef}
+          onPlateDrag={onPlateDrag}
+          onPlateZoom={onPlateZoom}
         />
         <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} />
         <Entrances />

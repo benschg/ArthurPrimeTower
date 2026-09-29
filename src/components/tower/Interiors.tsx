@@ -35,7 +35,19 @@ const LOOK: Record<Kind, Look> = {
  * Pull-out state. `open` lifts everything above the floor; `t` blends the plate from its
  * slot to `pos`/`quat`, a transform kept relative to the camera by the Scene each frame.
  */
-export type ExtractState = { floor: number; t: number; open: number; shift: number; pos: THREE.Vector3; quat: THREE.Quaternion };
+export type ExtractState = {
+  floor: number;
+  t: number;
+  open: number;
+  shift: number;
+  pos: THREE.Vector3;
+  quat: THREE.Quaternion;
+  /** user adjustments while the floor is bound to the camera */
+  spin: number;
+  tilt: number;
+  zoom: number;
+};
+export const PLATE_TILT = 0.95;
 export const OPEN_GAP = 9;
 export const PLATE_LIFT = 0.2; // plate meshes sit this far above the floor elevation
 
