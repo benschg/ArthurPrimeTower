@@ -51,10 +51,20 @@ await page.screenshot({ path: path.join(out, "game-left.png") });
 await page.mouse.move(820, 420);
 await wait(900);
 await page.screenshot({ path: path.join(out, "game-right.png") });
-// sweep the pointer over the facade in rows
-for (let row = 0; row < 6; row++) {
-  const y = 250 + row * 70;
-  for (let x = 420; x <= 1020; x += 40) {
+// fast sweep: big jumps must still leave a continuous strip
+await page.mouse.move(610, 300);
+await wait(300);
+await page.mouse.move(830, 300);
+await wait(300);
+await page.mouse.move(610, 520);
+await wait(300);
+await page.mouse.move(830, 640);
+await wait(400);
+await page.screenshot({ path: path.join(out, "game-sweep.png") });
+// slower sweep over the facade in rows
+for (let row = 0; row < 4; row++) {
+  const y = 250 + row * 90;
+  for (let x = 600; x <= 840; x += 40) {
     await page.mouse.move(x, y);
     await wait(25);
   }

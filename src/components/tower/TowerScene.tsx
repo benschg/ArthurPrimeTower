@@ -352,6 +352,7 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
   const cableR = useRef<THREE.Mesh>(null);
   const target = useRef({ u: 0.5, y: highY - 6 });
   const pos = useRef({ u: 0.5, y: highY - 6 });
+  const prev = useRef({ x: (1 - 0.5) * len, y: highY - 6 - lowY }); // last squeegee position on the canvas
   const game = useRef({ started: 0, lastReport: 0, cleanedCount: 0, done: false });
 
   const roofY = TOWER_HEIGHT + 0.2;
@@ -363,8 +364,9 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
   useEffect(() => {
     if (!cleaning.active) return;
     dirt.reset();
+    prev.current = { x: (1 - pos.current.u) * len, y: pos.current.y - lowY };
     game.current = { started: performance.now(), lastReport: 0, cleanedCount: 0, done: false };
-  }, [cleaning.active, dirt]);
+  }, [cleaning.active, dirt, len, lowY]);
 
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime;
@@ -372,17 +374,25 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
       // follow the pointer target
       pos.current.u = THREE.MathUtils.damp(pos.current.u, target.current.u, 14, dt);
       pos.current.y = THREE.MathUtils.damp(pos.current.y, target.current.y, 14, dt);
-      // squeegee: clear dirt under the cradle (canvas x runs against `along`, like the plane's u)
+      // squeegee: sweep from the previous position to the new one so fast moves leave a
+      // continuous strip (canvas x runs against `along`, like the plane's u)
       const cx = (1 - pos.current.u) * len;
       const cy = pos.current.y - lowY;
-      const px = cx * CLEAN_PX;
-      const py = (H - cy) * CLEAN_PX;
-      dirt.clear(px - cradleHalf * CLEAN_PX, py - (cradleH / 2) * CLEAN_PX, cradleHalf * 2 * CLEAN_PX, cradleH * CLEAN_PX);
-      for (let gx = Math.floor(cx - cradleHalf); gx <= Math.floor(cx + cradleHalf); gx++) {
-        for (let gy = Math.floor(cy - cradleH / 2); gy <= Math.floor(cy + cradleH / 2); gy++) {
-          if (dirt.mark(gx, gy)) game.current.cleanedCount++;
+      const from = prev.current;
+      const dx = cx - from.x;
+      const dy = cy - from.y;
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx) / cradleHalf, Math.abs(dy) / (cradleH / 2))));
+      for (let k = 1; k <= steps; k++) {
+        const sx = from.x + (dx * k) / steps;
+        const sy = from.y + (dy * k) / steps;
+        dirt.clear((sx - cradleHalf) * CLEAN_PX, (H - sy - cradleH / 2) * CLEAN_PX, cradleHalf * 2 * CLEAN_PX, cradleH * CLEAN_PX);
+        for (let gx = Math.floor(sx - cradleHalf); gx <= Math.floor(sx + cradleHalf); gx++) {
+          for (let gy = Math.floor(sy - cradleH / 2); gy <= Math.floor(sy + cradleH / 2); gy++) {
+            if (dirt.mark(gx, gy)) game.current.cleanedCount++;
+          }
         }
       }
+      prev.current = { x: cx, y: cy };
       const now = performance.now();
       if (now - game.current.lastReport > 200) {
         game.current.lastReport = now;
