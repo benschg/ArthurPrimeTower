@@ -116,9 +116,9 @@ export const de: typeof en = {
     talk: {
       eyebrow: "Schulvortrag",
       title: "Die Präsentation",
-      intro: "Eine Präsentation mit 9 Folien für den Schulvortrag: die wichtigsten Fakten, die Geschichte, die Architektur und die Mieter, illustriert mit den Fotos dieser Seite.",
+      intro: "Eine Präsentation mit 8 Folien für den Schulvortrag: die wichtigsten Fakten, die Geschichte, die Architektur und die Mieter, illustriert mit den Fotos dieser Seite.",
       cta: "Präsentation öffnen",
-      detail: "9 Folien auf Deutsch und Englisch mit Sprechernotizen · Pfeiltasten zum Blättern, F für Vollbild",
+      detail: "8 Folien auf Deutsch und Englisch mit Sprechernotizen · Pfeiltasten zum Blättern, F für Vollbild",
       back: "Zur Website",
       help: "← → Folie wechseln · F Vollbild · N Sprechernotizen",
       prev: "Vorherige Folie",

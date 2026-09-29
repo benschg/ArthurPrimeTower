@@ -114,9 +114,9 @@ export const en = {
     talk: {
       eyebrow: "School talk",
       title: "The presentation",
-      intro: "A 9-slide deck for the school talk: the key facts, the history, the architecture and the tenants, illustrated with the photos from this site.",
+      intro: "An 8-slide deck for the school talk: the key facts, the history, the architecture and the tenants, illustrated with the photos from this site.",
       cta: "Open the presentation",
-      detail: "9 slides in German and English with speaker notes · arrow keys to navigate, F for fullscreen",
+      detail: "8 slides in German and English with speaker notes · arrow keys to navigate, F for fullscreen",
       back: "Back to the site",
       help: "← → change slide · F fullscreen · N speaker notes",
       prev: "Previous slide",

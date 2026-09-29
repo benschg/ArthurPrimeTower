@@ -16,6 +16,8 @@ export type Slide =
       photo: string;
       /** A QR code (SVG under /public) shown bottom right, with the address it encodes. */
       qr?: { file: string; label: string; hint: L };
+      /** A link shown under the QR code, e.g. to the sources on the website. */
+      link?: { href: string; label: string; hint: L };
       notes: L;
     }
   | {
@@ -36,13 +38,17 @@ export type Slide =
       id: string;
       eyebrow: L;
       title: L;
-      bars: { metres: number; label: string; note: L }[];
+      /**
+       * `photo` is a sky-free cutout under /public/photos/towers, cropped from the roof to
+       * `groundMetres` below the tower's foot, so all towers share one metres-to-pixels scale.
+       */
+      bars: { metres: number; label: string; note: L; photo: { file: string; author: string; license: string } }[];
+      groundMetres: number;
       highlight: number;
       footer: L;
       notes: L;
     }
-  | { kind: "gallery"; id: string; eyebrow: L; title: L; photos: { file: string; caption: L }[]; notes: L }
-  | { kind: "sources"; id: string; eyebrow: L; title: L; groups: { head: L; items: L[] }[]; notes: L };
+  | { kind: "gallery"; id: string; eyebrow: L; title: L; photos: { file: string; caption: L }[]; notes: L };
 
 export const slides: Slide[] = [
   {
@@ -153,49 +159,17 @@ export const slides: Slide[] = [
     eyebrow: l("Record", "Rekord"),
     title: l("Tallest building in Switzerland, 2011 to 2015", "Höchstes Haus der Schweiz, 2011 bis 2015"),
     bars: [
-      { metres: 105, label: "Messeturm Basel", note: l("Record holder until 2010", "Rekordhalter bis 2010") },
-      { metres: 126, label: "Prime Tower Zürich", note: l("Record holder 2011 to 2015", "Rekordhalter 2011 bis 2015") },
-      { metres: 178, label: "Roche Tower Basel", note: l("Record holder since 2015", "Rekordhalter seit 2015") },
+      { metres: 105, label: "Messeturm Basel", note: l("Record holder until 2010", "Rekordhalter bis 2010"), photo: { file: "messeturm-basel.webp", author: "Taxiarchos228", license: "FAL" } },
+      { metres: 126, label: "Prime Tower Zürich", note: l("Record holder 2011 to 2015", "Rekordhalter 2011 bis 2015"), photo: { file: "prime-tower.webp", author: "Micha L. Rieser", license: "Attribution" } },
+      { metres: 178, label: "Roche Tower Basel", note: l("Record holder since 2015", "Rekordhalter seit 2015"), photo: { file: "roche-tower.webp", author: "Taxiarchos228", license: "FAL" } },
     ],
+    /* Crops from Wikimedia Commons: File:Basel_-_Messeturm1.jpg, File:Prime_Tower_-_August_2012_-_Bild_2.JPG, File:Basel_-_Roche_Tower_-_September_2015_4.jpg */
+    groundMetres: 15,
     highlight: 1,
     footer: l("The Prime Tower is still the tallest building in Zürich.", "Der Prime Tower ist bis heute das höchste Gebäude in Zürich."),
     notes: l(
       "From 2011 to 2015 the Prime Tower was the tallest building in all of Switzerland. Before that, the Messeturm in Basel held the record at 105 metres. In 2015 the Roche Tower in Basel was finished, clearly taller at 178 metres. But in Zürich the Prime Tower is still the tallest building today.",
       "Von 2011 bis 2015 war der Prime Tower das höchste Gebäude der ganzen Schweiz. Vorher hielt der Messeturm in Basel mit 105 Metern den Rekord. 2015 wurde in Basel der Roche-Turm fertig, der mit 178 Metern deutlich höher ist. Aber in Zürich ist der Prime Tower bis heute das höchste Haus.",
-    ),
-  },
-  {
-    kind: "sources",
-    id: "quellen",
-    eyebrow: l("Sources", "Quellen"),
-    title: l("Where the facts come from", "Woher die Fakten stammen"),
-    groups: [
-      {
-        head: l("Text and numbers", "Texte und Zahlen"),
-        items: [
-          l("primetower.ch, the official website", "primetower.ch, die offizielle Webseite"),
-          l("gigon-guyer.ch, the architects", "gigon-guyer.ch, die Architekten"),
-          l("Swiss Prime Site, press releases 2010 and 2011", "Swiss Prime Site, Medienmitteilungen 2010 und 2011"),
-          l("Wikipedia, article «Prime Tower» (German and English)", "Wikipedia, Artikel «Prime Tower» (deutsch und englisch)"),
-          l("CTBUH Skyscraper Center", "CTBUH Skyscraper Center"),
-          l("Baunetz Wissen and Architectural Record", "Baunetz Wissen und Architectural Record"),
-          l("Historical Dictionary of Switzerland, article «Maag»", "Historisches Lexikon der Schweiz, Artikel «Maag»"),
-        ],
-      },
-      {
-        head: l("Photos", "Fotos"),
-        items: [
-          l("All photos come from Wikimedia Commons and are free to use (licences CC BY, CC BY-SA and CC0).", "Alle Fotos stammen von Wikimedia Commons und sind frei nutzbar (Lizenzen CC BY, CC BY-SA und CC0)."),
-          l(
-            "Photographers: Gostsens, Hauserphoton, Roland zh, Fred Romero, Daniel Reust, Hansueli Krapf, kuhnmi, FreeclimbZurich, Marius Haffner, Wendelin Jacober, Tschubby, Thomas Woodtli, Roy Egloff and Paebi.",
-            "Fotografiert haben: Gostsens, Hauserphoton, Roland zh, Fred Romero, Daniel Reust, Hansueli Krapf, kuhnmi, FreeclimbZurich, Marius Haffner, Wendelin Jacober, Tschubby, Thomas Woodtli, Roy Egloff und Paebi.",
-          ),
-        ],
-      },
-    ],
-    notes: l(
-      "These are my sources. The numbers come mainly from the tower's official website, from the architects and from Wikipedia. All photos are from Wikimedia Commons and may be used freely as long as the photographers are credited.",
-      "Hier sind meine Quellen. Die Zahlen stammen vor allem von der offiziellen Webseite des Turms, von den Architekten und von Wikipedia. Alle Fotos sind von Wikimedia Commons und dürfen frei verwendet werden, wenn man die Fotografen nennt.",
     ),
   },
   {
@@ -207,6 +181,10 @@ export const slides: Slide[] = [
     photo: "kaeferberg-evening.jpg",
     /* public/qr-site.svg: npx qrcode -t svg -e H -o public/qr-site.svg "https://primetower.arthurfaehndrich.ch/" */
     qr: { file: "qr-site.svg", label: "primetower.arthurfaehndrich.ch", hint: l("Scan to open the website", "Scannen und die Website öffnen") },
-    notes: l("Thank you for listening. If you have questions, I am happy to answer them.", "Vielen Dank fürs Zuhören. Wenn ihr Fragen habt, beantworte ich sie gerne."),
+    link: { href: "/#sources", label: "primetower.arthurfaehndrich.ch/#sources", hint: l("All sources are listed on the website", "Alle Quellen stehen auf der Website") },
+    notes: l(
+      "Thank you for listening. All my sources are listed with links on the website, under Sources. If you have questions, I am happy to answer them.",
+      "Vielen Dank fürs Zuhören. Alle meine Quellen findet ihr mit Links auf der Website unter «Quellen». Wenn ihr Fragen habt, beantworte ich sie gerne.",
+    ),
   },
 ];

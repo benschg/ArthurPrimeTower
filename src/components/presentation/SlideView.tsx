@@ -124,6 +124,12 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
             <Image src={`/${slide.qr.file}`} alt={slide.qr.label} width={340} height={340} unoptimized className="block" />
             <p className="font-mono text-[26px] tracking-wide text-paper">{slide.qr.label}</p>
             <p className="text-[24px] text-muted">{t(slide.qr.hint)}</p>
+            {slide.link && (
+              <a href={slide.link.href} onClick={(e) => e.stopPropagation()} className="mt-6 flex flex-col items-center gap-1 hover:text-accent">
+                <span className="font-mono text-[24px] tracking-wide text-paper">{slide.link.label}</span>
+                <span className="text-[24px] text-muted">{t(slide.link.hint)}</span>
+              </a>
+            )}
           </div>
         )}
       </section>
@@ -152,40 +158,25 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
   }
 
   if (slide.kind === "bars") {
-    const scale = 2.5;
+    const scale = 2.1;
+    const credits = [...new Set(slide.bars.map((b) => `${b.photo.author} (${b.photo.license})`))];
     return (
       <section className="absolute inset-0 bg-accent text-ink p-32 pb-40 flex flex-col gap-9">
         <p className="font-mono text-[26px] uppercase tracking-[0.3em] text-ink/70">{t(slide.eyebrow)}</p>
         <Title text={t(slide.title)} />
-        <div className="flex-1 flex items-end justify-center gap-20 px-20">
+        <div className="flex-1 flex items-end justify-center gap-24 px-20">
           {slide.bars.map((b, i) => (
-            <div key={b.label} className="flex-1 flex flex-col items-center gap-3">
-              <p className="text-[56px] font-semibold tracking-tight leading-[1.05]">{b.metres} m</p>
-              <div className={`w-[300px] rounded-t-xl ${i === slide.highlight ? "bg-ink" : "bg-ink/35"}`} style={{ height: b.metres * scale }} />
+            <div key={b.label} className="flex flex-col items-center gap-3">
+              <p className={`text-[56px] font-semibold tracking-tight leading-[1.05] ${i === slide.highlight ? "" : "text-ink/60"}`}>{b.metres} m</p>
+              {/* eslint-disable-next-line @next/next/no-img-element -- transparent cutout sized to scale */}
+              <img src={`/photos/towers/${b.photo.file}`} alt={b.label} style={{ height: (b.metres + slide.groundMetres) * scale }} className="w-auto max-w-none" />
               <p className="text-[28px] font-semibold text-center">{b.label}</p>
               <p className="text-[24px] text-ink/70 text-center">{t(b.note)}</p>
             </div>
           ))}
         </div>
-        <Footer left={t(slide.footer)} page={page} dark={false} />
-      </section>
-    );
-  }
-
-  if (slide.kind === "gallery") {
-    return (
-      <section className={`absolute inset-0 ${bg} text-paper p-32 pb-40 flex flex-col gap-9`}>
-        <Eyebrow text={t(slide.eyebrow)} />
-        <Title text={t(slide.title)} />
-        <div className="flex gap-8 flex-1 min-h-0">
-          {slide.photos.map((p) => (
-            <div key={p.file} className="flex-1 flex flex-col gap-3 min-h-0">
-              <Photo file={p.file} priority={active} sizes="25vw" className="flex-1" />
-              <p className="text-[24px] text-muted">{t(p.caption)}</p>
-            </div>
-          ))}
-        </div>
-        <Footer left={credit(slide.photos.map((p) => p.file))} page={page} />
+        <p className="text-[28px] leading-[1.4] text-center">{t(slide.footer)}</p>
+        <Footer left={`Fotos: ${credits.join(", ")} · Wikimedia Commons`} page={page} dark={false} />
       </section>
     );
   }
@@ -194,19 +185,15 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
     <section className={`absolute inset-0 ${bg} text-paper p-32 pb-40 flex flex-col gap-9`}>
       <Eyebrow text={t(slide.eyebrow)} />
       <Title text={t(slide.title)} />
-      <div className="flex gap-16 flex-1 min-h-0">
-        {slide.groups.map((g) => (
-          <div key={g.head.en} className="flex-1 flex flex-col gap-4">
-            <h3 className="text-[32px] font-semibold leading-[1.2]">{t(g.head)}</h3>
-            <ul className="list-disc pl-8 text-[26px] leading-[1.5] text-muted space-y-1">
-              {g.items.map((x) => (
-                <li key={x.en}>{t(x)}</li>
-              ))}
-            </ul>
+      <div className="flex gap-8 flex-1 min-h-0">
+        {slide.photos.map((p) => (
+          <div key={p.file} className="flex-1 flex flex-col gap-3 min-h-0">
+            <Photo file={p.file} priority={active} sizes="25vw" className="flex-1" />
+            <p className="text-[24px] text-muted">{t(p.caption)}</p>
           </div>
         ))}
       </div>
-      <Footer left="" page={page} />
+      <Footer left={credit(slide.photos.map((p) => p.file))} page={page} />
     </section>
   );
 }
