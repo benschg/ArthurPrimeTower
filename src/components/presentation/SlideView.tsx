@@ -121,12 +121,14 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
         </div>
         {slide.qr && (
           <div className="absolute right-32 bottom-32 flex flex-col items-center gap-4">
-            <Image src={`/${slide.qr.file}`} alt={slide.qr.label} width={340} height={340} unoptimized className="block" />
-            <p className="font-mono text-[26px] tracking-wide text-paper">{slide.qr.label}</p>
-            <p className="text-[24px] text-muted">{t(slide.qr.hint)}</p>
+            <a href={slide.qr.href} onClick={(e) => e.stopPropagation()} className="group flex flex-col items-center gap-4">
+              <Image src={`/${slide.qr.file}`} alt={slide.qr.label} width={340} height={340} unoptimized className="block" />
+              <span className="font-mono text-[26px] tracking-wide text-paper group-hover:text-accent">{slide.qr.label}</span>
+              <span className="text-[24px] text-muted">{t(slide.qr.hint)}</span>
+            </a>
             {slide.link && (
-              <a href={slide.link.href} onClick={(e) => e.stopPropagation()} className="mt-6 flex flex-col items-center gap-1 hover:text-accent">
-                <span className="font-mono text-[24px] tracking-wide text-paper">{slide.link.label}</span>
+              <a href={slide.link.href} onClick={(e) => e.stopPropagation()} className="group mt-6 flex flex-col items-center gap-1">
+                <span className="font-mono text-[24px] tracking-wide text-paper group-hover:text-accent">{slide.link.label}</span>
                 <span className="text-[24px] text-muted">{t(slide.link.hint)}</span>
               </a>
             )}

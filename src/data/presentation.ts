@@ -15,7 +15,7 @@ export type Slide =
       subtitle: L;
       photo: string;
       /** A QR code (SVG under /public) shown bottom right, with the address it encodes. */
-      qr?: { file: string; label: string; hint: L };
+      qr?: { file: string; href: string; label: string; hint: L };
       /** A link shown under the QR code, e.g. to the sources on the website. */
       link?: { href: string; label: string; hint: L };
       notes: L;
@@ -180,7 +180,7 @@ export const slides: Slide[] = [
     subtitle: l("Any questions?", "Habt ihr Fragen?"),
     photo: "kaeferberg-evening.jpg",
     /* public/qr-site.svg: npx qrcode -t svg -e H -o public/qr-site.svg "https://primetower.arthurfaehndrich.ch/" */
-    qr: { file: "qr-site.svg", label: "primetower.arthurfaehndrich.ch", hint: l("Scan to open the website", "Scannen und die Website öffnen") },
+    qr: { file: "qr-site.svg", href: "/", label: "primetower.arthurfaehndrich.ch", hint: l("Scan to open the website", "Scannen und die Website öffnen") },
     link: { href: "/#sources", label: "primetower.arthurfaehndrich.ch/#sources", hint: l("All sources are listed on the website", "Alle Quellen stehen auf der Website") },
     notes: l(
       "Thank you for listening. All my sources are listed with links on the website, under Sources. If you have questions, I am happy to answer them.",
