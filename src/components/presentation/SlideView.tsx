@@ -119,6 +119,13 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
           <p className="text-[48px] font-light text-paper/90">{t(slide.subtitle)}</p>
           <p className="text-[24px] text-muted">{credit([slide.photo])}</p>
         </div>
+        {slide.qr && (
+          <div className="absolute right-32 bottom-32 flex flex-col items-center gap-4">
+            <Image src={`/${slide.qr.file}`} alt={slide.qr.label} width={340} height={340} unoptimized className="block" />
+            <p className="font-mono text-[26px] tracking-wide text-paper">{slide.qr.label}</p>
+            <p className="text-[24px] text-muted">{t(slide.qr.hint)}</p>
+          </div>
+        )}
       </section>
     );
   }

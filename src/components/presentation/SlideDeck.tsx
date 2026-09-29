@@ -8,7 +8,7 @@ import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 import { CANVAS_H, CANVAS_W, SlideView } from "./SlideView";
 
-/* The current slide lives in the URL hash (#1 … #16), read through an external store so it hydrates cleanly. */
+/* The current slide lives in the URL hash (#1 … #9), read through an external store so it hydrates cleanly. */
 function slideFromHash() {
   const n = parseInt(window.location.hash.replace("#", ""), 10);
   return Number.isFinite(n) && n >= 1 && n <= slides.length ? n - 1 : 0;
