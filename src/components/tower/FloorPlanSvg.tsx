@@ -1,3 +1,5 @@
+import type { Lang } from "@/i18n";
+import { ui } from "@/i18n/ui";
 import {
   basePolygon,
   cores,
@@ -17,7 +19,8 @@ import {
  * Schematic floor plan drawn from the measured geometry: footprint, cores, perimeter
  * columns, and the facade that steps out at this stage. North is up.
  */
-export function FloorPlanSvg({ floor, size = 220 }: { floor: number; size?: number }) {
+export function FloorPlanSvg({ floor, size = 220, lang }: { floor: number; size?: number; lang: Lang }) {
+  const t = ui[lang].viewer;
   const stage = stageForFloor(floor);
   const poly = stage.polygon;
   const area = polygonArea(poly);
@@ -39,12 +42,10 @@ export function FloorPlanSvg({ floor, size = 220 }: { floor: number; size?: numb
 
   const pts = (p: Pt[]) => p.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(" ");
 
-  // Which facade stepped out at this stage (index into stages)
   const stageIndex = stages.indexOf(stage);
   const pushedEdge = stageIndex === 2 ? EDGE_NE : stageIndex === 3 ? EDGE_SE : stageIndex === 4 ? EDGE_W : -1;
   const edge = (i: number): [Pt, Pt] => [poly[i], poly[(i + 1) % poly.length]];
 
-  // Struts (inclined columns) that land on this floor's stage start
   const strutPts = struts()
     .filter((s) => Math.abs(s.to[1] - (stageIndex > 0 ? stages[stageIndex].from : -1)) < 0.01)
     .map((s) => [s.to[0], s.to[2]] as Pt);
@@ -56,12 +57,9 @@ export function FloorPlanSvg({ floor, size = 220 }: { floor: number; size?: numb
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H + 18}`} width={W} height={H + 18} className="block" role="img" aria-label={`Schematic plan of floor ${floor}`}>
-      {/* base outline for reference */}
+    <svg viewBox={`0 0 ${W} ${H + 18}`} width={W} height={H + 18} className="block" role="img" aria-label={t.planAria(floor)}>
       <polygon points={pts(basePolygon)} fill="none" stroke="var(--muted)" strokeOpacity={0.35} strokeDasharray="3 3" strokeWidth={1} />
-      {/* this floor */}
       <polygon points={pts(poly)} fill="var(--accent)" fillOpacity={0.12} stroke="var(--paper)" strokeWidth={1.4} strokeLinejoin="round" />
-      {/* pushed-out facade */}
       {pushedEdge >= 0 && (
         <line
           x1={sx(edge(pushedEdge)[0][0])}
@@ -73,7 +71,6 @@ export function FloorPlanSvg({ floor, size = 220 }: { floor: number; size?: numb
           strokeLinecap="round"
         />
       )}
-      {/* cores */}
       {cores.map((c) => (
         <rect
           key={c.name}
@@ -88,24 +85,20 @@ export function FloorPlanSvg({ floor, size = 220 }: { floor: number; size?: numb
           strokeWidth={0.8}
         />
       ))}
-      {/* columns */}
       {cols.map(([x, y], i) => (
         <rect key={i} x={sx(x) - 1.6} y={sy(y) - 1.6} width={3.2} height={3.2} fill="var(--paper)" />
       ))}
-      {/* strut landing points */}
       {strutPts.map(([x, y], i) => (
         <circle key={i} cx={sx(x)} cy={sy(y)} r={2.6} fill="none" stroke="var(--accent)" strokeWidth={1.2} />
       ))}
-      {/* north arrow */}
       <g transform={`translate(${W - 12} 14)`} fill="var(--muted)">
         <polygon points="0,-9 4,4 0,1 -4,4" />
         <text y={16} textAnchor="middle" fontSize={8} fontFamily="var(--font-mono)">
           N
         </text>
       </g>
-      {/* caption */}
       <text x={0} y={H + 13} fontSize={9} fontFamily="var(--font-mono)" fill="var(--muted)">
-        {area.toFixed(0)} m² · {dims.w.toFixed(0)} × {dims.h.toFixed(0)} m · {cols.length} cols
+        {t.planCaption(area.toFixed(0), dims.w.toFixed(0), dims.h.toFixed(0), cols.length)}
       </text>
     </svg>
   );

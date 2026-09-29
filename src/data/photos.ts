@@ -5,6 +5,7 @@ export const photos: Photo[] = [
   {
     "file": "hero-plaza-dusk.jpg",
     "title": "Blue hour at the plaza entrance",
+    "titleDe": "Blaue Stunde am Platzeingang",
     "author": "Gostsens",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -15,6 +16,7 @@ export const photos: Photo[] = [
   {
     "file": "from-hardbruecke.jpg",
     "title": "From Bahnhof Hardbrücke",
+    "titleDe": "Vom Bahnhof Hardbrücke",
     "author": "Hauserphoton",
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
@@ -25,6 +27,7 @@ export const photos: Photo[] = [
   {
     "file": "kaeferberg-evening.jpg",
     "title": "Evening light from Käferberg",
+    "titleDe": "Abendlicht vom Käferberg",
     "author": "Roland zh",
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
@@ -35,6 +38,7 @@ export const photos: Photo[] = [
   {
     "file": "low-angle-sunny.jpg",
     "title": "Green glass against blue sky",
+    "titleDe": "Grünes Glas vor blauem Himmel",
     "author": "Fred Romero from Paris, France",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
@@ -45,6 +49,7 @@ export const photos: Photo[] = [
   {
     "file": "aerial-2023.jpg",
     "title": "Drone aerial over Zürich-West, 2023",
+    "titleDe": "Drohnenaufnahme über Zürich-West, 2023",
     "author": "Daniel Reust",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -55,6 +60,7 @@ export const photos: Photo[] = [
   {
     "file": "aerial-2011.jpg",
     "title": "Aerial view amid the railway yards, 2011",
+    "titleDe": "Luftbild inmitten der Gleisfelder, 2011",
     "author": "Hansueli Krapf  This   file was uploaded  with Commonist.",
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
@@ -65,6 +71,7 @@ export const photos: Photo[] = [
   {
     "file": "top-alps-bluehour.jpg",
     "title": "Lit upper floors against the Alps",
+    "titleDe": "Beleuchtete Obergeschosse vor den Alpen",
     "author": "kuhnmi",
     "license": "CC BY 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
@@ -75,6 +82,7 @@ export const photos: Photo[] = [
   {
     "file": "night-entrance.jpg",
     "title": "Entrance canopy and lobby glow at night",
+    "titleDe": "Vordach und leuchtende Lobby bei Nacht",
     "author": "FreeclimbZurich",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -85,6 +93,7 @@ export const photos: Photo[] = [
   {
     "file": "night-elevated.jpg",
     "title": "Night view with Hardbrücke",
+    "titleDe": "Nachtansicht mit Hardbrücke",
     "author": "FreeclimbZurich",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -95,6 +104,7 @@ export const photos: Photo[] = [
   {
     "file": "facade-lookup.jpg",
     "title": "Straight up the glass grid",
+    "titleDe": "Senkrecht hinauf am Glasraster",
     "author": "Marius Haffner from Grenchen, Schweiz",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
@@ -105,6 +115,7 @@ export const photos: Photo[] = [
   {
     "file": "cantilever-evening.jpg",
     "title": "Upper volumes and cantilevers, 2011",
+    "titleDe": "Obere Volumen und Auskragungen, 2011",
     "author": "Roland zh",
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
@@ -115,6 +126,7 @@ export const photos: Photo[] = [
   {
     "file": "reflection.jpg",
     "title": "Reflected in the neighbouring facade",
+    "titleDe": "Gespiegelt in der Nachbarfassade",
     "author": "Wendelin Jacober",
     "license": "CC0",
     "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
@@ -125,6 +137,7 @@ export const photos: Photo[] = [
   {
     "file": "cubus-annex.jpg",
     "title": "The Cubus annex with the tower behind",
+    "titleDe": "Der Annexbau Cubus mit dem Turm dahinter",
     "author": "Gostsens",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -135,6 +148,7 @@ export const photos: Photo[] = [
   {
     "file": "viaduct-arch.jpg",
     "title": "Framed by the railway viaduct",
+    "titleDe": "Gerahmt vom Eisenbahnviadukt",
     "author": "Tschubby",
     "license": "CC BY-SA 3.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
@@ -145,6 +159,7 @@ export const photos: Photo[] = [
   {
     "file": "snowfall.jpg",
     "title": "Snowfall on the Maag site, 2021",
+    "titleDe": "Schneefall auf dem Maag-Areal, 2021",
     "author": "Thomas Woodtli from Zürich, Switzerland",
     "license": "CC BY-SA 2.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
@@ -155,6 +170,7 @@ export const photos: Photo[] = [
   {
     "file": "maagplatz-cubus.jpg",
     "title": "From Maagplatz with the Cubus",
+    "titleDe": "Vom Maagplatz mit dem Cubus",
     "author": "Roy Egloff",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -165,6 +181,7 @@ export const photos: Photo[] = [
   {
     "file": "view-from-top.jpg",
     "title": "View from the tower toward Uetliberg",
+    "titleDe": "Blick vom Turm zum Uetliberg",
     "author": "Paebi",
     "license": "CC BY-SA 4.0",
     "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",

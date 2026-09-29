@@ -1,23 +1,26 @@
+import type { L } from "@/i18n";
+
 export type Fact = {
-  label: string;
+  label: L;
   value: string;
-  note?: string;
+  note?: L;
   source?: string;
 };
 
 export type Tenant = {
   name: string;
-  industry: string;
-  floors?: string;
+  industry: L;
+  floors?: L;
   building: "Prime Tower" | "Cubus" | "Diagonal" | "Platform";
   status: "current" | "former";
-  note?: string;
+  note?: L;
   source?: string;
 };
 
 export type Photo = {
   file: string; // path under /public/photos
   title: string;
+  titleDe?: string;
   author: string;
   license: string;
   licenseUrl?: string;
@@ -29,9 +32,11 @@ export type Photo = {
 export type FloorBand = {
   from: number;
   to: number;
-  label: string;
+  label: L;
   tenant?: string;
   color: string;
 };
 
 export type Source = { title: string; url: string };
+
+export type Plan = { title: L; url: string; note: L; kind: "plan" | "section" | "site" | "pdf" };

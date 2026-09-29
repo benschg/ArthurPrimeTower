@@ -25,6 +25,8 @@ page.on("console", (m) => {
   if (m.type() === "error") errors.push("console: " + m.text());
 });
 
+// The site defaults to German; pin English so the button labels below match.
+await page.evaluateOnNewDocument(() => localStorage.setItem("prime-tower-lang", "en"));
 await page.goto(base, { waitUntil: "networkidle0", timeout: 120000 });
 await page.waitForSelector("canvas", { timeout: 60000 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

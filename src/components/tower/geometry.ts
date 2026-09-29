@@ -65,6 +65,17 @@ export function polygonArea(p: Pt[]): number {
   return Math.abs(signedArea(p));
 }
 
+/** Unit outward normal of edge i (from vertex i to i+1), independent of winding. */
+export function edgeOutwardNormal(poly: Pt[], i: number): Pt {
+  const a = poly[i];
+  const b = poly[(i + 1) % poly.length];
+  const ex = b[0] - a[0];
+  const ey = b[1] - a[1];
+  const len = Math.hypot(ex, ey);
+  const ccw = signedArea(poly) > 0;
+  return ccw ? [ey / len, -ex / len] : [-ey / len, ex / len];
+}
+
 function lineIntersect(p1: Pt, d1: Pt, p2: Pt, d2: Pt): Pt {
   const det = d1[0] * d2[1] - d1[1] * d2[0];
   if (Math.abs(det) < 1e-9) return [p2[0], p2[1]];
@@ -103,18 +114,18 @@ export function growPolygon(poly: Pt[], d: number): Pt[] {
   return out;
 }
 
-export type Stage = { from: number; to: number; polygon: Pt[]; label: string };
+export type Stage = { from: number; to: number; polygon: Pt[]; label: { en: string; de: string } };
 
 const withNE = offsetEdge(basePolygon, EDGE_NE, 1.3);
 const withNESE = offsetEdge(withNE, EDGE_SE, 3.0);
 const withAll = offsetEdge(withNESE, EDGE_W, 2.8);
 
 export const stages: Stage[] = [
-  { from: 0, to: 0, polygon: offsetEdge(basePolygon, EDGE_SE, -3.5), label: "Ground floor, recessed entrance porch" },
-  { from: 1, to: 10, polygon: basePolygon, label: "Base plan, 1,600 m² inside the facade" },
-  { from: 11, to: 16, polygon: withNE, label: "North-east facade steps out 1.3 m" },
-  { from: 17, to: 25, polygon: withNESE, label: "Hardbrücke facade cantilevers 3 m" },
-  { from: 26, to: 35, polygon: withAll, label: "West facade cantilevers 2.8 m" },
+  { from: 0, to: 0, polygon: offsetEdge(basePolygon, EDGE_SE, -3.5), label: { en: "Ground floor, recessed entrance porch", de: "Erdgeschoss, zurückversetzter Eingang" } },
+  { from: 1, to: 10, polygon: basePolygon, label: { en: "Base plan, 1,600 m² inside the facade", de: "Grundplan, 1600 m² innerhalb der Fassade" } },
+  { from: 11, to: 16, polygon: withNE, label: { en: "North-east facade steps out 1.3 m", de: "Nordostfassade springt 1.3 m vor" } },
+  { from: 17, to: 25, polygon: withNESE, label: { en: "Hardbrücke facade cantilevers 3 m", de: "Hardbrücke-Fassade kragt 3 m aus" } },
+  { from: 26, to: 35, polygon: withAll, label: { en: "West facade cantilevers 2.8 m", de: "Westfassade kragt 2.8 m aus" } },
 ];
 
 export function stageForFloor(f: number): Stage {

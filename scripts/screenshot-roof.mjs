@@ -18,6 +18,7 @@ await page.setViewport({ width: 1440, height: 900 });
 const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.text()));
+await page.evaluateOnNewDocument(() => localStorage.setItem("prime-tower-lang", "en"));
 await page.goto(base, { waitUntil: "networkidle0", timeout: 120000 });
 await page.waitForSelector("canvas", { timeout: 60000 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

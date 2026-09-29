@@ -1,6 +1,7 @@
 // Downloads a curated set of freely licensed Prime Tower photos from Wikimedia Commons
 // into public/photos and writes src/data/photos.ts with attribution metadata.
 // Run: node scripts/fetch-photos.mjs
+// German titles (titleDe) live in src/data/photos.ts; re-add them there after regenerating.
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -108,6 +109,7 @@ for (const p of picks) {
   results.push({
     file: `${p.slug}.jpg`,
     title: p.title,
+    titleDe: p.titleDe,
     author,
     license,
     licenseUrl: licenseUrls[license],
