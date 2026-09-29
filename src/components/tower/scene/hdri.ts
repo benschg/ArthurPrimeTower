@@ -5,7 +5,7 @@ import { useLoader, useThree } from "@react-three/fiber";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 
 export const HDRI = {
-  day: "/hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+  day: "/hdri/kloofendal_48d_partly_cloudy_puresky_2k.hdr",
   night: "/hdri/shanghai_bund_2k.hdr",
 };
 
