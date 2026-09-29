@@ -229,7 +229,7 @@ function GlassStages({ night, dim, env, unit }: { night: boolean; dim: boolean; 
       <mesh geometry={geometry} castShadow receiveShadow>
         <shaderMaterial ref={matRef} args={[params]} />
       </mesh>
-      <Roof night={night} />
+      <Roof night={night} party={unit.cleaning.active && unit.cleaning.progress >= 0.99} />
       <MaintenanceUnit {...unit} />
     </group>
   );
@@ -317,6 +317,11 @@ function useDirt(len: number, height: number) {
       tex.needsUpdate = true;
     };
     /** Marks a 1 m cell as cleaned; true if it was dirty before. */
+    const clearAll = () => {
+      ctx.clearRect(0, 0, w, h);
+      cleaned.fill(1);
+      tex.needsUpdate = true;
+    };
     const mark = (gx: number, gy: number) => {
       if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) return false;
       const idx = gy * cols + gx;
@@ -324,7 +329,7 @@ function useDirt(len: number, height: number) {
       cleaned[idx] = 1;
       return true;
     };
-    return { tex, cols, rows, reset, clear, mark };
+    return { tex, cols, rows, reset, clear, clearAll, mark };
   }, [len, height]);
 }
 
@@ -368,9 +373,17 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
     game.current = { started: performance.now(), lastReport: 0, cleanedCount: 0, done: false };
   }, [cleaning.active, dirt, len, lowY]);
 
+  // Success forced from outside (hidden shortcut): wipe the facade and freeze.
+  useEffect(() => {
+    if (cleaning.active && cleaning.progress >= 0.99 && !game.current.done) {
+      dirt.clearAll();
+      game.current.done = true;
+    }
+  }, [cleaning.active, cleaning.progress, dirt]);
+
   useFrame(({ clock }, dt) => {
     const t = clock.elapsedTime;
-    if (cleaning.active) {
+    if (cleaning.active && !game.current.done) {
       // follow the pointer target
       pos.current.u = THREE.MathUtils.damp(pos.current.u, target.current.u, 14, dt);
       pos.current.y = THREE.MathUtils.damp(pos.current.y, target.current.y, 14, dt);
@@ -394,13 +407,14 @@ function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitPro
       }
       prev.current = { x: cx, y: cy };
       const now = performance.now();
-      if (now - game.current.lastReport > 200) {
+      if (!game.current.done && now - game.current.lastReport > 200) {
         game.current.lastReport = now;
-        const progress = game.current.cleanedCount / (dirt.cols * dirt.rows);
+        const progress = Math.min(1, game.current.cleanedCount / (dirt.cols * dirt.rows) / 0.97);
         const secondsLeft = Math.max(0, GAME_SECONDS - (now - game.current.started) / 1000);
-        onProgress(Math.min(1, progress / 0.97), secondsLeft);
+        if (progress >= 0.99) game.current.done = true; // freeze the clock and the final score
+        onProgress(progress, secondsLeft);
       }
-    } else {
+    } else if (!cleaning.active) {
       // idle patrol
       pos.current.u = 0.5 + 0.18 * Math.sin(t * 0.04);
       const drop = 0.5 - 0.5 * Math.cos(t * 0.09);
@@ -583,13 +597,13 @@ function useLouvreTexture() {
   }, []);
 }
 
-function AviationLight({ position, night, glow, mast = 2 }: { position: [number, number, number]; night: boolean; glow: THREE.Texture; mast?: number }) {
+function AviationLight({ position, night, glow, mast = 2, party = false }: { position: [number, number, number]; night: boolean; glow: THREE.Texture; mast?: number; party?: boolean }) {
   const sprite = useRef<THREE.Sprite>(null);
   const lamp = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    const pulse = 0.85 + 0.15 * Math.sin(t * 2.2 + position[0]);
-    const base = night ? 9 : 3.2;
+    const pulse = party ? 0.6 + 0.6 * Math.max(0, Math.sin(t * 9 + position[0] * 0.7)) : 0.85 + 0.15 * Math.sin(t * 2.2 + position[0]);
+    const base = (night ? 9 : 3.2) * (party ? 1.6 : 1);
     if (sprite.current) sprite.current.scale.setScalar(base * pulse);
     const m = lamp.current?.material as THREE.MeshStandardMaterial | undefined;
     if (m) m.emissiveIntensity = (night ? 6 : 2.5) * pulse;
@@ -612,7 +626,7 @@ function AviationLight({ position, night, glow, mast = 2 }: { position: [number,
 }
 
 /** Parapet, plant enclosure, mast and the ring of red aviation lights seen in photos. */
-function Roof({ night }: { night: boolean }) {
+function Roof({ night, party }: { night: boolean; party: boolean }) {
   const top = stages[stages.length - 1].polygon;
   const glow = useGlowTexture();
   const louvre = useLouvreTexture();
@@ -654,10 +668,10 @@ function Roof({ night }: { night: boolean }) {
         <cylinderGeometry args={[0.1, 0.24, 7.2, 8]} />
         <meshStandardMaterial color="#d7dee6" metalness={0.4} roughness={0.4} />
       </mesh>
-      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 7.2, 2]} night={night} glow={glow} mast={0.6} />
-      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 3.6, 2]} night={night} glow={glow} mast={0.2} />
+      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 7.2, 2]} night={night} glow={glow} mast={0.6} party={party} />
+      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 3.6, 2]} night={night} glow={glow} mast={0.2} party={party} />
       {lights.map(([e, n], i) => (
-        <AviationLight key={i} position={[e, TOWER_HEIGHT + 1.0, -n]} night={night} glow={glow} />
+        <AviationLight key={i} position={[e, TOWER_HEIGHT + 1.0, -n]} night={night} glow={glow} party={party} />
       ))}
     </group>
   );
@@ -828,7 +842,8 @@ function Footprint({ polygon, height, color, floors, name, note }: (typeof neigh
   );
 }
 
-function Site({ showGarage, night, lang }: { showGarage: boolean; night: boolean; lang: Lang }) {
+function Site({ garageT, night, lang }: { garageT: number; night: boolean; lang: Lang }) {
+  const showGarage = garageT > 0.001;
   const lab = ui[lang].viewer.labels;
   const bRot = (bridge.bearing * Math.PI) / 180;
   const rRot = (railway.bearing * Math.PI) / 180;
@@ -840,12 +855,13 @@ function Site({ showGarage, night, lang }: { showGarage: boolean; night: boolean
         <meshStandardMaterial
           color={night ? "#0d131a" : "#161d27"}
           roughness={1}
-          transparent
-          opacity={showGarage ? 0.12 : 1}
+          transparent={showGarage}
+          opacity={THREE.MathUtils.lerp(1, 0.12, garageT)}
           depthWrite={!showGarage}
         />
       </mesh>
       <Grid
+        renderOrder={-1}
         position={[0, 0.03, 0]}
         args={[1200, 1200]}
         cellSize={10}
@@ -907,7 +923,25 @@ function Site({ showGarage, night, lang }: { showGarage: boolean; night: boolean
   );
 }
 
-function Garage({ lang }: { lang: Lang }) {
+/**
+ * Invisible volume over the garage footprint. Hovering the plaza around the tower
+ * (or anything inside the basement volume once revealed) peeks at the garage.
+ */
+function GaragePeekTarget({ onChange }: { onChange: (v: boolean) => void }) {
+  const geo = useMemo(() => extrudeUp(growPolygon(garagePolygon, 4), BASEMENT_LEVELS * BASEMENT_HEIGHT + 0.6), []);
+  return (
+    <mesh
+      geometry={geo}
+      position={[0, -BASEMENT_LEVELS * BASEMENT_HEIGHT - 0.3, 0]}
+      onPointerOver={() => onChange(true)}
+      onPointerOut={() => onChange(false)}
+    >
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function Garage({ lang, t }: { lang: Lang; t: number }) {
   const lab = ui[lang].viewer.labels;
   const bays = useMemo(() => {
     const all = parkingBays();
@@ -951,11 +985,11 @@ function Garage({ lang }: { lang: Lang }) {
         return (
           <group key={level}>
             <mesh geometry={slab} position={[0, yFloor, 0]}>
-              <meshStandardMaterial color="#7dd3c0" transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} />
+              <meshStandardMaterial color="#7dd3c0" transparent opacity={0.22 * t} depthWrite={false} side={THREE.DoubleSide} />
             </mesh>
-            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.8 }))} position={[0, yFloor, 0]} />
-            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.35 }))} position={[0, yTop - 0.05, 0]} />
-            <Html zIndexRange={[5, 0]} position={[-40, yFloor + 1, 30]} distanceFactor={200} style={{ pointerEvents: "none" }}>
+            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.8 * t }))} position={[0, yFloor, 0]} />
+            <primitive object={new THREE.Line(outline, new THREE.LineBasicMaterial({ color: "#7dd3c0", transparent: true, opacity: 0.35 * t }))} position={[0, yTop - 0.05, 0]} />
+            <Html zIndexRange={[5, 0]} position={[-40, yFloor + 1, 30]} distanceFactor={200} style={{ pointerEvents: "none", opacity: t }}>
               <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent whitespace-nowrap">
                 {level === 0 ? lab.level1 : lab.level2}
               </div>
@@ -967,26 +1001,26 @@ function Garage({ lang }: { lang: Lang }) {
       {garagePolygon.map(([e, n], i) => (
         <mesh key={i} position={[e, -BASEMENT_LEVELS * BASEMENT_HEIGHT * 0.5, -n]}>
           <boxGeometry args={[0.2, BASEMENT_LEVELS * BASEMENT_HEIGHT, 0.2]} />
-          <meshBasicMaterial color="#7dd3c0" transparent opacity={0.6} />
+          <meshBasicMaterial color="#7dd3c0" transparent opacity={0.6 * t} />
         </mesh>
       ))}
       {/* Cores and raft foundation continue below ground */}
       {cores.map((c) => (
         <mesh key={c.name} position={[c.center[0], -BASEMENT_LEVELS * BASEMENT_HEIGHT * 0.5, -c.center[1]]} rotation={[0, DRAWING_ROT_Y, 0]}>
           <boxGeometry args={[c.size[0], BASEMENT_LEVELS * BASEMENT_HEIGHT, c.size[1]]} />
-          <meshStandardMaterial color="#8d97a3" transparent opacity={0.7} />
+          <meshStandardMaterial color="#8d97a3" transparent opacity={0.7 * t} />
         </mesh>
       ))}
       {/* Ramp */}
       <mesh geometry={ramp} position={[0, -BASEMENT_HEIGHT * 0.5, 0]} rotation={[0, 0, 0]}>
-        <meshStandardMaterial color="#4f8fd6" transparent opacity={0.45} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#4f8fd6" transparent opacity={0.45 * t} side={THREE.DoubleSide} />
       </mesh>
-      <Html zIndexRange={[5, 0]} position={[38, 2, -50]} center distanceFactor={200} style={{ pointerEvents: "none" }}>
+      <Html zIndexRange={[5, 0]} position={[38, 2, -50]} center distanceFactor={200} style={{ pointerEvents: "none", opacity: t }}>
         <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-accent-2 whitespace-nowrap">{lab.ramp}</div>
       </Html>
       <instancedMesh ref={inst} args={[undefined, undefined, 91 * BASEMENT_LEVELS]}>
         <boxGeometry args={[2.2, 0.5, 4.6]} />
-        <meshStandardMaterial color="#4f8fd6" emissive="#1d4f8f" emissiveIntensity={0.8} transparent opacity={0.9} />
+        <meshStandardMaterial color="#4f8fd6" emissive="#1d4f8f" emissiveIntensity={0.8} transparent opacity={0.9 * t} />
       </instancedMesh>
     </group>
   );
@@ -1071,12 +1105,32 @@ function useNightBlend(night: boolean) {
   return t;
 }
 
+/** Eases a value toward `target` at `rate`, re-rendering while it moves. */
+function useEased(target: number, rate: number) {
+  const [v, setV] = useState(target);
+  const ref = useRef(v);
+  useFrame((_, dt) => {
+    const next = THREE.MathUtils.damp(ref.current, target, rate, dt);
+    if (Math.abs(next - ref.current) > 0.002) {
+      ref.current = next;
+      setV(next);
+    } else if (ref.current !== target && Math.abs(next - target) < 0.01) {
+      ref.current = target;
+      setV(target);
+    }
+  });
+  return v;
+}
+
 const mixColor = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 
 function Scene(props: SceneProps) {
   const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
   const labelFloor = selected ?? hovered;
   const nt = useNightBlend(night);
+  const [peek, setPeek] = useState(false);
+  const garageOpen = showGarage || (peek && !explode && !cleaning.active);
+  const garageT = useEased(garageOpen ? 1 : 0, 4);
   // The sky swaps HDRI at the midpoint of the fade, dipping through dark so the cut is hidden.
   const skyNight = nt >= 0.5;
   const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2) ; // 1 at the midpoint, 0 at either end
@@ -1123,8 +1177,9 @@ function Scene(props: SceneProps) {
         {labelFloor !== null && !cleaning.active && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
-      <Site showGarage={showGarage} night={night} lang={lang} />
-      {showGarage && <Garage lang={lang} />}
+      <Site garageT={garageT} night={night} lang={lang} />
+      <GaragePeekTarget onChange={setPeek} />
+      {garageT > 0.001 && <Garage lang={lang} t={garageT} />}
 
       <OrbitControls
         ref={controlsRef as never}

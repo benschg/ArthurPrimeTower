@@ -18,7 +18,7 @@ const TowerScene = dynamic(() => import("./TowerScene"), {
 });
 
 type ToggleKey = keyof Omit<ViewerState, "hovered" | "selected" | "cleaning">;
-const toggleKeys: ToggleKey[] = ["showTenants", "explode", "showGarage", "night", "autoRotate"];
+const toggleKeys: ToggleKey[] = ["showTenants", "explode", "showGarage", "autoRotate"];
 
 const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 
@@ -55,7 +55,8 @@ export function TowerViewer() {
     [],
   );
   const onCleanProgress = useCallback(
-    (progress: number, secondsLeft: number) => setState((s) => (s.cleaning.active ? { ...s, cleaning: { active: true, progress, secondsLeft } } : s)),
+    (progress: number, secondsLeft: number) =>
+      setState((s) => (s.cleaning.active && s.cleaning.progress < 0.99 ? { ...s, cleaning: { active: true, progress, secondsLeft } } : s)),
     [],
   );
   // Deep link: /#clean starts the window-cleaning game once the scene is up.
@@ -64,6 +65,16 @@ export function TowerViewer() {
     const id = window.setTimeout(onStartCleaning, 1500);
     return () => window.clearTimeout(id);
   }, [onStartCleaning]);
+
+  // Hidden shortcut: Shift+F while cleaning finishes the job instantly.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.shiftKey && (e.key === "F" || e.key === "f"))) return;
+      setState((s) => (s.cleaning.active && s.cleaning.progress < 0.99 ? { ...s, cleaning: { ...s.cleaning, progress: 1 } } : s));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const stopCleaning = () => setState((s) => ({ ...s, cleaning: idleClean }));
   const restartCleaning = () => {
@@ -88,8 +99,9 @@ export function TowerViewer() {
   }, [band]);
 
   const clean = state.cleaning;
-  const pct = Math.round(clean.progress * 100);
-  const finished = clean.active && (clean.progress >= 1 || clean.secondsLeft <= 0);
+  const success = clean.active && clean.progress >= 0.99;
+  const pct = success ? 100 : Math.round(clean.progress * 100);
+  const finished = success || (clean.active && clean.secondsLeft <= 0);
 
   return (
     <div className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + (unitHover && !clean.active ? "cursor-pointer" : "")}>
@@ -102,6 +114,7 @@ export function TowerViewer() {
         onCleanProgress={onCleanProgress}
         onHoverUnit={setUnitHover}
       />
+      {success && <Celebration title={g.success} text={g.timeUsed(Math.round(60 - clean.secondsLeft))} />}
       {/* Legibility gradients over the HDRI sky */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-ink/80 to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 left-0 w-[46vw] max-w-md bg-linear-to-r from-ink/70 to-transparent" />
@@ -119,17 +132,16 @@ export function TowerViewer() {
 
       {/* Controls */}
       <div className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
-        <LangToggle className="glass mb-1" />
-        {toggleKeys.map((key) =>
-          key === "night" ? (
-            <DayNightToggle
-              key={key}
-              night={state.night}
-              onToggle={() => !clean.active && toggle("night")}
-              label={t.toggles.night[0]}
-              hint={t.toggles.night[1]}
-            />
-          ) : (
+        <div className="mb-1 flex items-center gap-1.5">
+          <LangToggle className="glass h-9" />
+          <DayNightToggle
+            night={state.night}
+            onToggle={() => !clean.active && toggle("night")}
+            label={t.toggles.night[0]}
+            hint={t.toggles.night[1]}
+          />
+        </div>
+        {toggleKeys.map((key) => (
           <button
             key={key}
             onClick={() => toggle(key)}
@@ -142,8 +154,7 @@ export function TowerViewer() {
           >
             {t.toggles[key][0]}
           </button>
-          ),
-        )}
+        ))}
       </div>
 
       {/* Floor plan panel */}
@@ -178,7 +189,7 @@ export function TowerViewer() {
             <div className="mt-2 h-2 rounded-full bg-ink-3 overflow-hidden">
               <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
             </div>
-            <p className="mt-2 text-xs text-muted leading-snug">{finished ? (clean.progress >= 1 ? g.done : g.timeUp) : g.hint}</p>
+            <p className="mt-2 text-xs text-muted leading-snug">{finished ? (success ? g.done : g.timeUp) : g.hint}</p>
             <div className="mt-3 flex gap-2 font-mono text-xs">
               <button onClick={restartCleaning} className="glass px-3 py-1.5 rounded-md hover:text-accent">
                 {g.again}
@@ -254,6 +265,55 @@ function FloorPlanLinks({ floor }: { floor: number }) {
           {pick(ref.pdf.title, lang)} · primetower.ch ↗
         </a>
       )}
+    </div>
+  );
+}
+
+const CONFETTI_COLORS = ["#7dd3c0", "#4f8fd6", "#f2c14e", "#e25c4a", "#a78bfa", "#ffffff"];
+
+/** Full-viewer confetti burst with a success card. Deterministic layout, CSS-driven motion. */
+function Celebration({ title, text }: { title: string; text: string }) {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 90 }, (_, i) => {
+        const r = (k: number) => {
+          const n = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+          return n - Math.floor(n);
+        };
+        return {
+          left: r(1) * 100,
+          delay: r(2) * 1.8,
+          duration: 2.6 + r(3) * 2,
+          size: 6 + r(4) * 8,
+          color: CONFETTI_COLORS[Math.floor(r(5) * CONFETTI_COLORS.length)],
+          sway: 20 + r(6) * 60,
+          round: r(7) > 0.6,
+        };
+      }),
+    [],
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className={"confetti absolute -top-4 " + (p.round ? "rounded-full" : "rounded-sm")}
+          style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.round ? p.size : p.size * 1.6,
+            background: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            ["--sway" as string]: `${p.sway}px`,
+          }}
+        />
+      ))}
+      <div className="celebrate-card absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 glass rounded-2xl px-8 py-6 text-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-accent">{title}</p>
+        <p className="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight">100%</p>
+        <p className="mt-1 text-sm text-muted">{text}</p>
+      </div>
     </div>
   );
 }

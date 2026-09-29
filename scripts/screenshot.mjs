@@ -67,6 +67,10 @@ await shot("05-night");
 await page.screenshot({ path: path.join(out, "05c-toggle-night.png"), clip: { x: 1300, y: 150, width: 140, height: 80 } });
 await click("Night");
 
+// hover the plaza next to the tower: the garage should peek into view
+await page.mouse.move(560, 700);
+await wait(1200);
+await page.screenshot({ path: path.join(out, "06a-garage-peek.png") });
 // hover a floor: move the mouse over the tower centre
 await page.mouse.move(720, 420);
 await shot("06-hover");

@@ -61,14 +61,16 @@ await wait(300);
 await page.mouse.move(830, 640);
 await wait(400);
 await page.screenshot({ path: path.join(out, "game-sweep.png") });
-// slower sweep over the facade in rows
-for (let row = 0; row < 4; row++) {
-  const y = 250 + row * 90;
-  for (let x = 600; x <= 840; x += 40) {
+// thorough sweep over the whole facade to trigger the success celebration
+for (let y = 150; y <= 745; y += 18) {
+  const xs = ((y / 18) | 0) % 2 === 0 ? [596, 620, 650, 680, 710, 740, 770, 800, 830, 848] : [848, 830, 800, 770, 740, 710, 680, 650, 620, 596];
+  for (const x of xs) {
     await page.mouse.move(x, y);
-    await wait(25);
+    await wait(12);
   }
 }
+await wait(1500);
+await page.screenshot({ path: path.join(out, "game-success.png") });
 await wait(800);
 await page.screenshot({ path: path.join(out, "game-mid.png") });
 const hud = await page.evaluate(() => document.body.innerText.match(/\d+%/)?.[0]);
