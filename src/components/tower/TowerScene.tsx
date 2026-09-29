@@ -6,7 +6,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "
 import * as THREE from "three";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { envMaxLod, facadeMaterialParams, prepareEnvTexture, type FacadeMaterial } from "./facadeShader";
-import { Interiors } from "./Interiors";
+import { EXTRACT_DISTANCE, Interiors, type ExtractState } from "./Interiors";
 import { entrances } from "./interiorLayout";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { floorBands } from "@/data/tower";
@@ -185,8 +185,9 @@ function useHdri(night: boolean) {
   return night ? prepared[1] : prepared[0];
 }
 
-function GlassStages({ night, dim, env, unit }: { night: boolean; dim: boolean; env: THREE.Texture; unit: UnitProps }) {
+function GlassStages({ night, dim, env, unit, explodeRef }: { night: boolean; dim: boolean; env: THREE.Texture; unit: UnitProps; explodeRef: RefObject<{ gap: number; thin: number }> }) {
   const { map, lit, repeat } = useFacadeTextures();
+  const roofRef = useRef<THREE.Group>(null);
   const params = useMemo(() => facadeMaterialParams(), []);
   const matRef = useRef<FacadeMaterial>(null);
   // All stages merged into one geometry so the whole skin shares one material and draw call.
@@ -215,6 +216,7 @@ function GlassStages({ night, dim, env, unit }: { night: boolean; dim: boolean; 
   }, [env]);
 
   useFrame((_, dt) => {
+    if (roofRef.current) roofRef.current.position.y = (FLOORS - 1) * (explodeRef.current?.gap ?? 0);
     const m = matRef.current;
     if (!m) return;
     const u = m.uniforms;
@@ -230,8 +232,11 @@ function GlassStages({ night, dim, env, unit }: { night: boolean; dim: boolean; 
       <mesh geometry={geometry} castShadow receiveShadow>
         <shaderMaterial ref={matRef} args={[params]} />
       </mesh>
-      <Roof night={night} party={unit.cleaning.active && unit.cleaning.progress >= 0.99} />
-      <MaintenanceUnit {...unit} />
+      {/* the roof and the cradle ride up with the exploded stack */}
+      <group ref={roofRef}>
+        <Roof night={night} party={unit.cleaning.active && unit.cleaning.progress >= 0.99} />
+        <MaintenanceUnit {...unit} />
+      </group>
     </group>
   );
 }
@@ -780,7 +785,12 @@ function FloorSlices({
   onSelect,
   interactive,
   explodeRef,
-}: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & { interactive: boolean; explodeRef: RefObject<{ gap: number; thin: number }> }) {
+  extractRef,
+}: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & {
+  interactive: boolean;
+  explodeRef: RefObject<{ gap: number; thin: number }>;
+  extractRef: RefObject<ExtractState>;
+}) {
   const geos = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
@@ -792,12 +802,14 @@ function FloorSlices({
   const group = useRef<THREE.Group>(null);
 
   useFrame(() => {
-    // the Scene damps the explode amount; plates follow it and shrink to thin slabs
+    // the Scene damps the explode and pull-out amounts; plates follow them
     const x = explodeRef.current;
-    if (!group.current || !x) return;
+    const ex = extractRef.current;
+    if (!group.current || !x || !ex) return;
     group.current.children.forEach((child, f) => {
-      child.position.y = floorElevation(f) + 0.2 + f * x.gap;
-      child.scale.y = x.thin;
+      const pulled = f === ex.floor ? ex.t : 0;
+      child.position.set(ex.dx * EXTRACT_DISTANCE * pulled, floorElevation(f) + 0.2 + f * x.gap, ex.dz * EXTRACT_DISTANCE * pulled);
+      child.scale.y = THREE.MathUtils.lerp(x.thin, 0.12, pulled);
     });
   });
 
@@ -1098,10 +1110,24 @@ type ControlsLike = { target: THREE.Vector3; update: () => void };
  * Eases the orbit target and camera distance when a mode changes (garage → look low,
  * explode → back off), then leaves the camera to the user. Portrait screens start farther out.
  */
-function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage: boolean; explode: boolean; cleaning: boolean; controlsRef: RefObject<ControlsLike | null> }) {
+function CameraRig({
+  showGarage,
+  explode,
+  cleaning,
+  selected,
+  controlsRef,
+  extractRef,
+}: {
+  showGarage: boolean;
+  explode: boolean;
+  cleaning: boolean;
+  selected: number | null;
+  controlsRef: RefObject<ControlsLike | null>;
+  extractRef: RefObject<ExtractState>;
+}) {
   const size = useThree((st) => st.size);
   const portrait = size.height > size.width;
-  const mode = cleaning ? "cleaning" : showGarage ? "garage" : explode ? "explode" : "default";
+  const mode = cleaning ? "cleaning" : selected !== null ? `extract-${selected}` : showGarage ? "garage" : explode ? "explode" : "default";
   const facade = useFacadeFrame();
   const goal = useRef(new THREE.Vector3());
   const anim = useRef({ until: 0, mode: "" });
@@ -1144,6 +1170,27 @@ function CameraRig({ showGarage, explode, cleaning, controlsRef }: { showGarage:
       camera.position.x = THREE.MathUtils.damp(camera.position.x, goal.current.x, 3, dt);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, goal.current.y, 3, dt);
       camera.position.z = THREE.MathUtils.damp(camera.position.z, goal.current.z, 3, dt);
+      c.update();
+      return;
+    }
+    if (selected !== null) {
+      // Pulled-out floor: glide to a three-quarter view above it, then hand the camera back.
+      if (performance.now() < anim.current.until) {
+        const ex = extractRef.current;
+        if (!ex) return;
+        const gap = explode ? EXPLODE_GAP : 0;
+        const ty = floorElevation(selected) + 1.5 + selected * gap;
+        const tx = ex.dx * EXTRACT_DISTANCE;
+        const tz = ex.dz * EXTRACT_DISTANCE;
+        const dist = portrait ? 120 : 82;
+        goal.current.set(tx + ex.dx * dist * 0.72, ty + dist * 0.7, tz + ex.dz * dist * 0.72);
+        c.target.x = THREE.MathUtils.damp(c.target.x, tx, 3, dt);
+        c.target.y = THREE.MathUtils.damp(c.target.y, ty, 3, dt);
+        c.target.z = THREE.MathUtils.damp(c.target.z, tz, 3, dt);
+        camera.position.x = THREE.MathUtils.damp(camera.position.x, goal.current.x, 3, dt);
+        camera.position.y = THREE.MathUtils.damp(camera.position.y, goal.current.y, 3, dt);
+        camera.position.z = THREE.MathUtils.damp(camera.position.z, goal.current.z, 3, dt);
+      }
       c.update();
       return;
     }
@@ -1261,10 +1308,30 @@ function Scene(props: SceneProps) {
   const [skyNight, setSkyNight] = useState(night);
   const [garageMounted, setGarageMounted] = useState(false);
   const explodeRef = useRef({ gap: 0, thin: 1 });
+  const extractRef = useRef<ExtractState>({ floor: -1, t: 0, dx: 1, dz: 0 });
+  const [interiorsActive, setInteriorsActive] = useState(false);
+  const camera = useThree((st) => st.camera);
+  // A newly selected floor pulls out toward the side the camera is on.
+  useEffect(() => {
+    if (selected === null) return;
+    const ex = extractRef.current;
+    const len = Math.hypot(camera.position.x, camera.position.z) || 1;
+    ex.floor = selected;
+    ex.dx = camera.position.x / len;
+    ex.dz = camera.position.z / len;
+  }, [selected, camera]);
   useFrame((_, dt) => {
     const x = explodeRef.current;
     x.gap = THREE.MathUtils.damp(x.gap, explode ? EXPLODE_GAP : 0, 4, dt);
     x.thin = THREE.MathUtils.damp(x.thin, explode ? 0.12 : 1, 4, dt);
+    const ex = extractRef.current;
+    ex.t = THREE.MathUtils.damp(ex.t, selected !== null ? 1 : 0, 3.5, dt);
+    if (selected === null && ex.t < 0.002) {
+      ex.t = 0;
+      ex.floor = -1;
+    }
+    const want = x.gap > 0.001 || ex.t > 0.001 || explode || selected !== null;
+    if (want !== interiorsActive) setInteriorsActive(want);
   });
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
   const dim = showTenants || explode;
@@ -1296,12 +1363,22 @@ function Scene(props: SceneProps) {
       <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>
-        <GlassStages night={night} dim={dim} env={env} unit={unit} />
+        <GlassStages night={night} dim={dim} env={env} unit={unit} explodeRef={explodeRef} />
         <Structure visible={showTenants && !explode} />
-        <FloorSlices showTenants={showTenants} explode={explode} hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} interactive={!cleaning.active} explodeRef={explodeRef} />
-        <Interiors explodeRef={explodeRef} explode={explode} />
+        <FloorSlices
+          showTenants={showTenants}
+          explode={explode}
+          hovered={hovered}
+          selected={selected}
+          onHover={onHover}
+          onSelect={onSelect}
+          interactive={!cleaning.active}
+          explodeRef={explodeRef}
+          extractRef={extractRef}
+        />
+        <Interiors explodeRef={explodeRef} extractRef={extractRef} active={interiorsActive} />
         <Entrances />
-        {labelFloor !== null && !cleaning.active && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
+        {labelFloor !== null && !cleaning.active && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
       <Site lang={lang} />
@@ -1321,7 +1398,7 @@ function Scene(props: SceneProps) {
         maxPolarAngle={showGarage ? Math.PI * 0.64 : Math.PI * 0.495}
         target={[0, 58, 0]}
       />
-      <CameraRig showGarage={showGarage} explode={explode} cleaning={cleaning.active} controlsRef={controlsRef} />
+      <CameraRig showGarage={showGarage} explode={explode} cleaning={cleaning.active} selected={selected} controlsRef={controlsRef} extractRef={extractRef} />
     </>
   );
 }

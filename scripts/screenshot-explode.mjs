@@ -64,5 +64,13 @@ for (let i = 0; i < 14; i++) {
 await wait(1200);
 await page.screenshot({ path: path.join(out, "explode-closeup.png") });
 await page.screenshot({ path: path.join(out, "explode-detail.png"), clip: { x: 420, y: 200, width: 600, height: 400 } });
+// pull a floor out: leave explode, click a floor around mid-height
+await click("Explode");
+await wait(2500);
+await page.mouse.move(720, 420);
+await wait(300);
+await page.mouse.click(720, 420);
+await wait(2600);
+await page.screenshot({ path: path.join(out, "pullout.png") });
 await browser.close();
 console.log(errors.length ? errors.join("\n") : "No page errors.");

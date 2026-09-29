@@ -40,6 +40,8 @@ export const KINDS = [
   "stairStep",
   "reception",
   "lounge",
+  "liftCable",
+  "liftCar",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -71,10 +73,27 @@ function floorKind(f: number): "lobby" | "office" | "conference" | "restaurant" 
   return "office";
 }
 
+/** Lift shaft centres in the drawing frame: two banks of four in the main core, the fire lift in the north-east core. */
+export const LIFT_SHAFTS: Pt[] = [
+  ...[18.0, 20.6, 23.2, 25.8].map((x) => [x, 19.6] as Pt),
+  ...[18.0, 20.6, 23.2, 25.8].map((x) => [x, 28.3] as Pt),
+  [46.3, 14.6],
+];
+
 export function buildInteriors(): Record<Kind, Inst[]> {
   const out = makeStore();
   const push = (k: Kind, f: number, e: number, n: number, y: number, rot: number, sx: number, sy: number, sz: number) =>
     out[k].push({ f, e, n, y, rot, sx, sy, sz });
+
+  // Lift cables run the full height of the exploded stack (scaled at render time) and one
+  // car waits in each shaft at a plausible floor.
+  LIFT_SHAFTS.forEach(([x, y], i) => {
+    const [e, n] = drawingToWorld([x, y]);
+    push("liftCable", 0, e + 0.35, n, 0, DRAWING_ROT_Y, 0.06, 1, 0.06);
+    push("liftCable", 0, e - 0.35, n, 0, DRAWING_ROT_Y, 0.06, 1, 0.06);
+    const carFloor = [3, 12, 22, 31, 7, 17, 27, 34, 0][i];
+    push("liftCar", carFloor, e, n, INTERIOR_HEIGHT / 2 - 0.15, DRAWING_ROT_Y, 2.0, INTERIOR_HEIGHT - 0.4, 2.0);
+  });
 
   for (let f = 0; f < FLOORS; f++) {
     const poly = stageForFloor(f).polygon;

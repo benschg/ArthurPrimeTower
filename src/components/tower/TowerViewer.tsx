@@ -10,9 +10,8 @@ import { floorBands } from "@/data/tower";
 import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
-import { floorElevation, FLOORS, stageForFloor, TOWER_HEIGHT } from "./geometry";
+import { floorElevation, FLOORS, polygonArea, stageForFloor, TOWER_HEIGHT } from "./geometry";
 import { DayNightToggle } from "./DayNightToggle";
-import { FloorPlanSvg } from "./FloorPlanSvg";
 import { planForFloor } from "./floorPlans";
 import type { CleanState, ViewerState } from "./TowerScene";
 
@@ -158,22 +157,6 @@ export function TowerViewer() {
         ))}
       </div>
 
-      {/* Floor plan panel */}
-      {focus !== null && (
-        <aside className="z-20 absolute right-4 top-72 sm:right-8 sm:top-74 glass rounded-xl p-3 sm:p-4 w-[min(300px,calc(100%-2rem))] pointer-events-auto">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-accent">
-            {t.floor} {focus === 0 ? t.ground : focus} · {t.plan}
-          </p>
-          <div className="mt-2 overflow-hidden rounded-md bg-ink/60 p-2 flex justify-center">
-            <FloorPlanSvg floor={focus} size={230} lang={lang} />
-          </div>
-          <FloorPlanLinks floor={focus} />
-          <p className="mt-2 text-[10px] text-muted leading-snug">
-            {t.schematic} {state.selected === null ? t.clickToPin : t.pinned}
-          </p>
-        </aside>
-      )}
-
       {/* Bottom-left card: floor info, or the cleaning HUD */}
       <div className="z-20 absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
         {clean.active ? (
@@ -214,7 +197,22 @@ export function TowerViewer() {
               {t.floor} {focus === 0 ? t.ground : focus} {t.of} {FLOORS - 1} · {floorElevation(focus).toFixed(1)} m
             </p>
             <p className="mt-1 text-base font-medium leading-snug">{band ? pick(band.label, lang) : t.offices}</p>
-            <p className="mt-1 text-[11px] text-muted">{pick(stageForFloor(focus).label, lang)}</p>
+            <p className="mt-1 text-[11px] text-muted">
+              {pick(stageForFloor(focus).label, lang)} · {polygonArea(stageForFloor(focus).polygon).toFixed(0)} m²
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 pointer-events-auto font-mono text-[10px]">
+              {state.selected !== null ? (
+                <>
+                  <span className="text-accent">{t.pulled}</span>
+                  <button onClick={() => onSelect(null)} className="glass rounded-md px-2 py-1 hover:text-accent">
+                    {t.release} ✕
+                  </button>
+                </>
+              ) : (
+                <span className="text-muted">{t.pullOut}</span>
+              )}
+              <FloorPlanLink floor={focus} />
+            </div>
             {tenantsOnFloor.length > 0 && (
               <ul className="mt-3 space-y-2 pointer-events-auto">
                 {tenantsOnFloor.map((p) => {
@@ -263,28 +261,16 @@ export function TowerViewer() {
   );
 }
 
-function FloorPlanLinks({ floor }: { floor: number }) {
+function FloorPlanLink({ floor }: { floor: number }) {
   const { lang } = useLang();
   const t = ui[lang];
   const ref = planForFloor(floor);
+  const target = ref.pdf ?? ref.image;
+  if (!target) return null;
   return (
-    <div className="mt-2 space-y-1.5">
-      {ref.image && (
-        <a href={ref.image.url} target="_blank" rel="noreferrer" className="group block rounded-md overflow-hidden border border-line bg-ink/60">
-          {/* Linked from gigon-guyer.ch; the drawing is theirs and is not stored here. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ref.image.url} alt={pick(ref.image.title, lang)} loading="lazy" className="w-full h-24 object-cover object-center opacity-90 group-hover:opacity-100" />
-          <p className="px-2 py-1 text-[10px] text-muted">
-            <span className="text-paper">{pick(ref.image.title, lang)}</span> · {t.sections.plans.ggSource} ↗{!ref.image.exact && ` · ${t.viewer.nearestPlan}`}
-          </p>
-        </a>
-      )}
-      {ref.pdf && (
-        <a href={ref.pdf.url} target="_blank" rel="noreferrer" className="block rounded-md border border-line px-2 py-1 text-[10px] text-muted hover:text-accent">
-          {pick(ref.pdf.title, lang)} · primetower.ch ↗
-        </a>
-      )}
-    </div>
+    <a href={target.url} target="_blank" rel="noreferrer" className="ml-auto text-muted hover:text-accent underline decoration-line underline-offset-2">
+      {t.viewer.planLink} ↗
+    </a>
   );
 }
 
