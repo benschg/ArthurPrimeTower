@@ -3,9 +3,9 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { FacadeMaterial } from "../facadeShader";
-import { OPEN_GAP, type ExtractState } from "../Interiors";
+import type { ExtractState } from "../Interiors";
 import { FLOORS, floorHeight, floorElevation, stageForFloor } from "../geometry";
-import { extrudeUp } from "./helpers";
+import { extrudeUp, liftAbove } from "./helpers";
 import type { UnitProps } from "./types";
 import { MaintenanceUnit } from "./maintenance";
 import { Roof } from "./roof";
@@ -18,6 +18,7 @@ export function GlassStages({
   unit,
   explodeRef,
   extractRef,
+  outgoingRef,
 }: {
   night: boolean;
   dim: boolean;
@@ -25,9 +26,35 @@ export function GlassStages({
   unit: UnitProps;
   explodeRef: RefObject<{ gap: number; thin: number }>;
   extractRef: RefObject<ExtractState>;
+  outgoingRef: RefObject<ExtractState>;
 }) {
   const roofRef = useRef<THREE.Group>(null);
   const ringsRef = useRef<THREE.Group>(null);
+  // Per-ring opacity factor (1 = normal). A pulled-out floor's ring fades away so the plate
+  // does not clip through it; applied per draw via onBeforeRender on the shared material.
+  const fades = useRef<Float32Array>(new Float32Array(FLOORS).fill(1));
+  const ringRef = (f: number) => (m: THREE.Mesh | null) => {
+    if (!m) return;
+    m.onBeforeRender = () => {
+      const mat = m.material as FacadeMaterial;
+      const fade = fades.current[f];
+      if (fade < 0.999) {
+        mat.userData.savedOpacity = mat.uniforms.uOpacity.value;
+        mat.userData.savedDepth = mat.depthWrite;
+        mat.uniforms.uOpacity.value *= fade;
+        mat.depthWrite = false;
+      }
+    };
+    m.onAfterRender = () => {
+      const mat = m.material as FacadeMaterial;
+      if (mat.userData.savedOpacity !== undefined) {
+        mat.uniforms.uOpacity.value = mat.userData.savedOpacity;
+        mat.depthWrite = mat.userData.savedDepth;
+        delete mat.userData.savedOpacity;
+        delete mat.userData.savedDepth;
+      }
+    };
+  };
   // One shared facade material; one glass ring per floor so the stack can open and explode.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- env swaps via the uniform below
   const material = useMemo(() => createFacadeMaterial(env), []);
@@ -64,11 +91,14 @@ export function GlassStages({
   useFrame((_, dt) => {
     const gap = explodeRef.current?.gap ?? 0;
     const ex = extractRef.current;
-    const opening = ex && ex.floor >= 0 ? OPEN_GAP * ex.open : 0;
-    if (roofRef.current) roofRef.current.position.y = (FLOORS - 1) * gap + opening;
+    const prev = outgoingRef.current;
+    if (!ex || !prev) return;
+    if (roofRef.current) roofRef.current.position.y = (FLOORS - 1) * gap + liftAbove(FLOORS, ex, prev);
+    const fadeOf = (t: number) => 1 - THREE.MathUtils.smoothstep(t, 0, 0.35);
     if (ringsRef.current) {
       ringsRef.current.children.forEach((ring, f) => {
-        ring.position.y = floorElevation(f) + f * gap + (ex && ex.floor >= 0 && f > ex.floor ? opening : 0);
+        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev);
+        fades.current[f] = f === ex.floor ? fadeOf(ex.t) : f === prev.floor ? fadeOf(prev.t) : 1;
       });
     }
     const m = mat();
@@ -86,7 +116,7 @@ export function GlassStages({
     <group>
       <group ref={ringsRef}>
         {rings.map((g, f) => (
-          <mesh key={f} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
+          <mesh key={f} ref={ringRef(f)} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
         ))}
       </group>
       {/* the roof and the cradle ride up with the exploded stack */}

@@ -24,6 +24,8 @@ export function Scene(props: SceneProps) {
   const [garageMounted, setGarageMounted] = useState(false);
   const explodeRef = useRef({ gap: 0, thin: 1 });
   const extractRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion() });
+  // The floor on its way back in while a newly selected one comes out.
+  const outgoingRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion() });
   const [interiorsActive, setInteriorsActive] = useState(false);
   const bind = useRef({ pos: new THREE.Vector3(), quat: new THREE.Quaternion(), q1: new THREE.Quaternion(), q2: new THREE.Quaternion(), rest: new THREE.Vector3(), off: new THREE.Vector3() });
   useFrame((st, dt) => {
@@ -32,30 +34,46 @@ export function Scene(props: SceneProps) {
     x.thin = THREE.MathUtils.damp(x.thin, explode ? 0.12 : 1, 4, dt);
 
     const ex = extractRef.current;
+    const prev = outgoingRef.current;
     const sel = selected !== null && !cleaning.active;
-    if (sel && ex.floor < 0) ex.floor = selected;
-    // Selecting another floor while one is out: put the current one back first, then switch.
-    const switching = sel && ex.floor >= 0 && ex.floor !== selected;
-    const out = sel && !switching;
-    // Choreography: open the stack above the floor, then pop the plate out; reverse on release.
-    ex.open = THREE.MathUtils.damp(ex.open, out ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
-    ex.t = THREE.MathUtils.damp(ex.t, out && ex.open > 0.55 ? 1 : 0, 3.5, dt);
-    ex.shift = THREE.MathUtils.damp(ex.shift, sel ? 1 : 0, 3, dt);
-    if (switching && ex.t < 0.01 && ex.open < 0.02) {
+    // Selecting another floor while one is out: hand the current one to the outgoing slot so
+    // it retracts while the new one opens and pops out at the same time.
+    if (sel && ex.floor >= 0 && ex.floor !== selected) {
+      prev.floor = ex.floor;
+      prev.t = ex.t;
+      prev.open = ex.open;
+      prev.pos.copy(ex.pos);
+      prev.quat.copy(ex.quat);
+      ex.floor = selected;
       ex.t = 0;
       ex.open = 0;
-      ex.floor = selected;
     }
+    if (sel && ex.floor < 0) ex.floor = selected;
+    // Current: open the stack above the floor, then pop the plate out; reverse on release.
+    ex.open = THREE.MathUtils.damp(ex.open, sel ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
+    ex.t = THREE.MathUtils.damp(ex.t, sel && ex.open > 0.55 ? 1 : 0, 3.5, dt);
+    ex.shift = THREE.MathUtils.damp(ex.shift, sel ? 1 : 0, 3, dt);
     if (!sel && ex.t < 0.002 && ex.open < 0.002) {
       ex.t = 0;
       ex.open = 0;
       ex.floor = -1;
     }
-    if (ex.floor >= 0) {
-      const f = ex.floor;
+    // Outgoing: plate back in first, then the stack closes.
+    if (prev.floor >= 0) {
+      prev.t = THREE.MathUtils.damp(prev.t, 0, 4, dt);
+      prev.open = THREE.MathUtils.damp(prev.open, prev.t < 0.3 ? 0 : 1, 3.5, dt);
+      if (prev.t < 0.002 && prev.open < 0.002) {
+        prev.t = 0;
+        prev.open = 0;
+        prev.floor = -1;
+      }
+    }
+    const cam = st.camera;
+    const size = st.size;
+    const pose = (e: ExtractState) => {
+      if (e.floor < 0) return;
+      const f = e.floor;
       const b = bind.current;
-      const cam = st.camera;
-      const size = st.size;
       // rest: the plate's slot in the (possibly exploded) stack
       b.rest.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap, 0);
       // bound: a spot on the right of the view, tilted toward the viewer, long axis horizontal
@@ -69,15 +87,17 @@ export function Scene(props: SceneProps) {
       b.quat.copy(cam.quaternion).multiply(b.q1).multiply(b.q2);
       // Blend slot -> camera pose with the (already damped) pop-out amount. No extra lag:
       // once fully out the plate is rigidly linked to the camera.
-      const e = ex.t * ex.t * (3 - 2 * ex.t);
-      ex.pos.copy(b.rest).lerp(b.pos, e);
-      ex.quat.identity().slerp(b.quat, e);
-      // shift the picture right so the tower sits left of the pulled-out floor
-      const cam2 = cam as THREE.PerspectiveCamera;
-      if (ex.shift > 0.001) cam2.setViewOffset(size.width, size.height, ex.shift * 0.17 * size.width, 0, size.width, size.height);
-      else if (cam2.view?.enabled) cam2.clearViewOffset();
-    }
-    const want = x.gap > 0.001 || ex.floor >= 0 || explode || selected !== null;
+      const k = e.t * e.t * (3 - 2 * e.t);
+      e.pos.copy(b.rest).lerp(b.pos, k);
+      e.quat.identity().slerp(b.quat, k);
+    };
+    pose(ex);
+    pose(prev);
+    // shift the picture right so the tower sits left of the pulled-out floor
+    const cam2 = cam as THREE.PerspectiveCamera;
+    if (ex.shift > 0.001) cam2.setViewOffset(size.width, size.height, ex.shift * 0.17 * size.width, 0, size.width, size.height);
+    else if (cam2.view?.enabled) cam2.clearViewOffset();
+    const want = x.gap > 0.001 || ex.floor >= 0 || prev.floor >= 0 || explode || selected !== null;
     if (want !== interiorsActive) setInteriorsActive(want);
   });
   const unit: UnitProps = { cleaning, onStart: onStartCleaning, onProgress: onCleanProgress, onHoverUnit };
@@ -110,7 +130,7 @@ export function Scene(props: SceneProps) {
       <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>
-        <GlassStages night={night} dim={dim} env={glassEnv} unit={unit} explodeRef={explodeRef} extractRef={extractRef} />
+        <GlassStages night={night} dim={dim} env={glassEnv} unit={unit} explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} />
         <Structure visible={showTenants && !explode} />
         <FloorSlices
           showTenants={showTenants}
@@ -121,9 +141,9 @@ export function Scene(props: SceneProps) {
           onSelect={onSelect}
           interactive={!cleaning.active}
           explodeRef={explodeRef}
-          extractRef={extractRef}
+          extractRef={extractRef} outgoingRef={outgoingRef}
         />
-        <Interiors explodeRef={explodeRef} extractRef={extractRef} active={interiorsActive} />
+        <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} />
         <Entrances />
         {labelFloor !== null && !cleaning.active && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>

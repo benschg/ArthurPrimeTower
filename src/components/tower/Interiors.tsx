@@ -48,10 +48,12 @@ export const PLATE_LIFT = 0.2; // plate meshes sit this far above the floor elev
 export function Interiors({
   explodeRef,
   extractRef,
+  outgoingRef,
   active,
 }: {
   explodeRef: RefObject<{ gap: number; thin: number }>;
   extractRef: RefObject<ExtractState>;
+  outgoingRef: RefObject<ExtractState>;
   active: boolean;
 }) {
   const data = useMemo(() => buildInteriors(), []);
@@ -72,7 +74,7 @@ export function Interiors({
     return r;
   }, [data]);
   const refs = useRef<Partial<Record<Kind, THREE.InstancedMesh>>>({});
-  const applied = useRef({ gap: -1, open: -1, floor: -2 });
+  const applied = useRef({ gap: -1, open: -1, prevOpen: -1, floor: -2, prevFloor: -2 });
   const dummy = useRef(new THREE.Object3D());
   const plate = useRef(new THREE.Matrix4());
   const local = useRef(new THREE.Matrix4());
@@ -83,14 +85,25 @@ export function Interiors({
   useFrame(() => {
     const gap = explodeRef.current?.gap ?? 0;
     const ex = extractRef.current;
+    const prev = outgoingRef.current;
     const a = applied.current;
     const exploded = gap > 0.001;
     const exFloor = ex?.floor ?? -1;
+    const prevFloor = prev?.floor ?? -1;
     const open = ex?.open ?? 0;
-    const stackTop = TOWER_HEIGHT + (FLOORS - 1) * gap + (exFloor >= 0 ? OPEN_GAP * open : 0);
+    const prevOpen = prev?.open ?? 0;
+    const liftFor = (f: number) =>
+      OPEN_GAP * Math.max(exFloor >= 0 && f > exFloor ? open : 0, prevFloor >= 0 && f > prevFloor ? prevOpen : 0);
+    const stackTop = TOWER_HEIGHT + (FLOORS - 1) * gap + liftFor(FLOORS);
 
     // Whole stack (exploded view): recompose only when the gap, the opening or the floor changes.
-    if (Math.abs(gap - a.gap) > 0.0005 || Math.abs(open - a.open) > 0.0005 || exFloor !== a.floor) {
+    if (
+      Math.abs(gap - a.gap) > 0.0005 ||
+      Math.abs(open - a.open) > 0.0005 ||
+      Math.abs(prevOpen - a.prevOpen) > 0.0005 ||
+      exFloor !== a.floor ||
+      prevFloor !== a.prevFloor
+    ) {
       const d = dummy.current;
       for (const k of KINDS) {
         const mesh = refs.current[k];
@@ -100,8 +113,7 @@ export function Interiors({
         if (exploded) {
           for (let i = 0; i < list.length; i++) {
             const it = list[i];
-            const lift = exFloor >= 0 && it.f > exFloor ? OPEN_GAP * open : 0;
-            d.position.set(it.e, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + lift + it.y, -it.n);
+            d.position.set(it.e, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + liftFor(it.f) + it.y, -it.n);
             d.rotation.set(0, it.rot, 0);
             d.scale.set(it.sx, it.sy, it.sz);
             if (k === "liftCable") {
@@ -118,20 +130,27 @@ export function Interiors({
       }
       a.gap = gap;
       a.open = open;
+      a.prevOpen = prevOpen;
       a.floor = exFloor;
+      a.prevFloor = prevFloor;
     }
 
-    // The pulled-out floor follows its camera-bound transform every frame.
-    if (ex && exFloor >= 0) {
-      plate.current.compose(ex.pos, ex.quat, ONE);
-      const d = dummy.current;
-      for (const k of KINDS) {
-        if (k === "liftCable" || k === "liftCar") continue;
-        const mesh = refs.current[k];
-        if (!mesh) continue;
-        const list: Inst[] = data[k];
-        const [s0, s1] = ranges[k][exFloor];
-        const base = exploded ? s0 : 0;
+    // The pulled-out floor(s) follow their camera-bound transforms every frame. When not
+    // exploded the current floor's pieces take the first slots and the outgoing floor's the next.
+    const slots: ExtractState[] = [];
+    if (ex && exFloor >= 0) slots.push(ex);
+    if (prev && prevFloor >= 0 && prevFloor !== exFloor) slots.push(prev);
+    for (const k of KINDS) {
+      if (k === "liftCable" || k === "liftCar") continue;
+      const mesh = refs.current[k];
+      if (!mesh) continue;
+      const list: Inst[] = data[k];
+      let cursor = 0;
+      for (const e of slots) {
+        plate.current.compose(e.pos, e.quat, ONE);
+        const d = dummy.current;
+        const [s0, s1] = ranges[k][e.floor];
+        const base = exploded ? s0 : cursor;
         for (let i = s0; i < s1; i++) {
           const it = list[i];
           d.position.set(it.e, INTERIOR_BASE - PLATE_LIFT + it.y, -it.n);
@@ -142,9 +161,10 @@ export function Interiors({
           world.current.multiplyMatrices(plate.current, local.current);
           mesh.setMatrixAt(base + (i - s0), world.current);
         }
-        if (!exploded) mesh.count = s1 - s0;
-        mesh.instanceMatrix.needsUpdate = true;
+        cursor += s1 - s0;
       }
+      if (!exploded) mesh.count = cursor;
+      if (slots.length) mesh.instanceMatrix.needsUpdate = true;
     }
 
     // lift cars travel their shafts (exploded view only)
@@ -161,8 +181,7 @@ export function Interiors({
         const lo = Math.floor(fl);
         const frac = fl - lo;
         const elev = THREE.MathUtils.lerp(floorElevation(lo), floorElevation(Math.min(FLOORS - 1, lo + 1)), frac);
-        const lift = exFloor >= 0 && fl > exFloor ? OPEN_GAP * open : 0;
-        d.position.set(it.e, elev + INTERIOR_BASE + fl * gap + lift + it.y, -it.n);
+        d.position.set(it.e, elev + INTERIOR_BASE + fl * gap + liftFor(fl) + it.y, -it.n);
         d.rotation.set(0, it.rot, 0);
         d.scale.set(it.sx, it.sy, it.sz);
         d.updateMatrix();
@@ -173,7 +192,7 @@ export function Interiors({
     } else if (cars && !exploded) {
       cars.count = 0;
     }
-    const op = exploded ? Math.min(1, gap / 0.9) : (ex?.t ?? 0);
+    const op = exploded ? Math.min(1, gap / 0.9) : Math.max(ex?.t ?? 0, prev?.t ?? 0);
     for (const k of KINDS) {
       const m = refs.current[k]?.material as THREE.MeshStandardMaterial | undefined;
       if (m) m.opacity = (LOOK[k].opacity ?? 1) * op;

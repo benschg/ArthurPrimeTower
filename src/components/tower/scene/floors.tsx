@@ -4,9 +4,9 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { pick, type Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
-import { OPEN_GAP, PLATE_LIFT, type ExtractState } from "../Interiors";
+import { PLATE_LIFT, type ExtractState } from "../Interiors";
 import { FLOORS, TOWER_HEIGHT, floorHeight, floorElevation, growPolygon, stages, stageForFloor, DRAWING_ROT_Y, cores, perimeterColumns } from "../geometry";
-import { extrudeUp, bandForFloor, noRaycast, EXPLODE_GAP } from "./helpers";
+import { extrudeUp, bandForFloor, noRaycast, EXPLODE_GAP, liftAbove } from "./helpers";
 import type { SceneProps } from "./types";
 
 export function Structure({ visible }: { visible: boolean }) {
@@ -39,10 +39,12 @@ export function FloorSlices({
   interactive,
   explodeRef,
   extractRef,
+  outgoingRef,
 }: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & {
   interactive: boolean;
   explodeRef: RefObject<{ gap: number; thin: number }>;
   extractRef: RefObject<ExtractState>;
+  outgoingRef: RefObject<ExtractState>;
 }) {
   const geos = useMemo(
     () =>
@@ -58,16 +60,17 @@ export function FloorSlices({
     // the Scene damps the explode and pull-out amounts; plates follow them
     const x = explodeRef.current;
     const ex = extractRef.current;
-    if (!group.current || !x || !ex) return;
+    const prev = outgoingRef.current;
+    if (!group.current || !x || !ex || !prev) return;
     group.current.children.forEach((child, f) => {
-      if (f === ex.floor) {
-        child.position.copy(ex.pos);
-        child.quaternion.copy(ex.quat);
-        child.scale.y = THREE.MathUtils.lerp(x.thin, 0.12, ex.t);
+      const slot = f === ex.floor ? ex : f === prev.floor ? prev : null;
+      if (slot) {
+        child.position.copy(slot.pos);
+        child.quaternion.copy(slot.quat);
+        child.scale.y = THREE.MathUtils.lerp(x.thin, 0.12, slot.t);
         return;
       }
-      const lift = ex.floor >= 0 && f > ex.floor ? OPEN_GAP * ex.open : 0;
-      child.position.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap + lift, 0);
+      child.position.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap + liftAbove(f, ex, prev), 0);
       child.quaternion.identity();
       child.scale.y = x.thin;
     });

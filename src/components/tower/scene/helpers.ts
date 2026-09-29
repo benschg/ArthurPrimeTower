@@ -1,3 +1,4 @@
+import { OPEN_GAP, type ExtractState } from "../Interiors";
 import * as THREE from "three";
 import { floorBands } from "@/data/tower";
 import type { Pt } from "../geometry";
@@ -64,3 +65,10 @@ export const AX_Y = new THREE.Vector3(0, 1, 0);
 export const PLATE_YAW = Math.atan2(-Math.cos((34 * Math.PI) / 180), Math.sin((34 * Math.PI) / 180));
 
 export type ControlsLike = { target: THREE.Vector3; update: () => void };
+
+/** How far floor f is lifted by the stack opening below it (either extract slot). */
+export function liftAbove(f: number, ex: ExtractState, prev: ExtractState): number {
+  const a = ex.floor >= 0 && f > ex.floor ? ex.open : 0;
+  const b = prev.floor >= 0 && f > prev.floor ? prev.open : 0;
+  return OPEN_GAP * Math.max(a, b);
+}
