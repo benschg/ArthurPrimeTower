@@ -1,0 +1,19 @@
+{
+  "name": "ArthurPrimeTower",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code"
+      ]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/persist-claude.sh && npm install",
+  "postStartCommand": "bash .devcontainer/persist-claude.sh",
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/workspaces/.claude-home"
+  }
+}
