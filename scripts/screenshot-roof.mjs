@@ -24,7 +24,7 @@ await page.waitForSelector("canvas", { timeout: 60000 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(2500);
 const click = async (label) => {
-  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}']`);
+  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}' or @aria-label='${label}']`);
   await btn.click();
 };
 await click("Rotate");

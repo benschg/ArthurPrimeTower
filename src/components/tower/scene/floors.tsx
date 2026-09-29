@@ -6,7 +6,7 @@ import { pick, type Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
 import { PLATE_LIFT, type ExtractState } from "../Interiors";
 import { FLOORS, TOWER_HEIGHT, floorHeight, floorElevation, growPolygon, stages, stageForFloor, DRAWING_ROT_Y, cores, perimeterColumns } from "../geometry";
-import { extrudeUp, bandForFloor, noRaycast, EXPLODE_GAP, liftAbove } from "./helpers";
+import { extrudeUp, bandForFloor, noRaycast, EXPLODE_GAP, liftAbove, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
 import type { SceneProps } from "./types";
 
 export function Structure({ visible }: { visible: boolean }) {
@@ -44,7 +44,7 @@ export function FloorSlices({
   onPlateZoom,
 }: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & {
   interactive: boolean;
-  explodeRef: RefObject<{ gap: number; thin: number }>;
+  explodeRef: RefObject<ExplodeState>;
   extractRef: RefObject<ExtractState>;
   outgoingRef: RefObject<ExtractState>;
   onPlateDrag: (dx: number, dy: number) => void;
@@ -91,12 +91,13 @@ export function FloorSlices({
       if (slot) {
         child.position.copy(slot.pos);
         child.quaternion.copy(slot.quat);
-        child.scale.y = THREE.MathUtils.lerp(x.thin, 0.12, slot.t);
+        child.scale.set(1, THREE.MathUtils.lerp(x.thin, 0.12, slot.t), 1);
         return;
       }
-      child.position.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap + liftAbove(f, ex, prev), 0);
+      child.position.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap + liftAbove(f, ex, prev) + bulgeLift(f, x), 0);
       child.quaternion.identity();
-      child.scale.y = x.thin;
+      const bs = bulgeScale(f, x);
+      child.scale.set(bs, x.thin, bs);
     });
   });
 

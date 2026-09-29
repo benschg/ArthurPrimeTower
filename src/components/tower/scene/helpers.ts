@@ -72,3 +72,36 @@ export function liftAbove(f: number, ex: ExtractState, prev: ExtractState): numb
   const b = prev.floor >= 0 && f > prev.floor ? prev.open : 0;
   return OPEN_GAP * Math.max(a, b);
 }
+
+/** Explode-view state shared by plates, rings and interiors. */
+export type ExplodeState = {
+  gap: number;
+  thin: number;
+  /** damped hovered floor (or -1) driving the dock-style bulge */
+  hoverF: number;
+  /** damped strength of the bulge, 0..1 */
+  hoverAmt: number;
+};
+
+const BULGE_SIGMA = 1.6; // floors
+const BULGE_SCALE = 0.32; // extra footprint scale at the centre
+const BULGE_SPREAD = 2.2; // extra vertical room around the hovered floor, metres
+
+/** Dock-style bulge: 0..1 for floor f around the hovered floor. */
+export function bulge(f: number, x: ExplodeState): number {
+  if (x.hoverAmt < 0.001 || x.hoverF < 0) return 0;
+  const d = (f - x.hoverF) / BULGE_SIGMA;
+  return x.hoverAmt * Math.exp(-0.5 * d * d);
+}
+
+/** Footprint scale for floor f in the exploded view. */
+export function bulgeScale(f: number, x: ExplodeState): number {
+  return 1 + BULGE_SCALE * bulge(f, x);
+}
+
+/** Extra vertical offset so the bulged floors have room: above the hovered floor up, below down. */
+export function bulgeLift(f: number, x: ExplodeState): number {
+  if (x.hoverAmt < 0.001 || x.hoverF < 0) return 0;
+  const t = (f - x.hoverF) / (BULGE_SIGMA * 1.5);
+  return BULGE_SPREAD * x.hoverAmt * Math.tanh(t);
+}

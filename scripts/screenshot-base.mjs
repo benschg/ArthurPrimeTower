@@ -19,7 +19,7 @@ await page.goto(base, { waitUntil: "networkidle0", timeout: 120000 });
 await page.waitForSelector("canvas", { timeout: 60000 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(2500);
-const [btn] = await page.$$("xpath/.//button[normalize-space()='Rotate']");
+const [btn] = await page.$$("xpath/.//button[normalize-space()='Rotate' or @aria-label='Rotate']");
 await btn.click();
 await wait(600);
 await page.mouse.move(1200, 200); // away from the plaza so the garage does not peek
@@ -32,7 +32,7 @@ await page.mouse.move(720, 40, { steps: 20 });
 await page.mouse.up();
 await wait(800);
 await page.screenshot({ path: path.join(out, "base-grazing.png") });
-const [night] = await page.$$("xpath/.//button[normalize-space()='Night']");
+const [night] = await page.$$("xpath/.//button[normalize-space()='Night' or @aria-label='Night']");
 await night.click();
 await wait(3000);
 await page.screenshot({ path: path.join(out, "base-grazing-night.png") });

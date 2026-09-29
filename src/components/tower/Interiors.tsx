@@ -1,5 +1,6 @@
 "use client";
 
+import { bulgeLift, bulgeScale, type ExplodeState } from "./scene/helpers";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
@@ -63,7 +64,7 @@ export function Interiors({
   outgoingRef,
   active,
 }: {
-  explodeRef: RefObject<{ gap: number; thin: number }>;
+  explodeRef: RefObject<ExplodeState>;
   extractRef: RefObject<ExtractState>;
   outgoingRef: RefObject<ExtractState>;
   active: boolean;
@@ -86,7 +87,7 @@ export function Interiors({
     return r;
   }, [data]);
   const refs = useRef<Partial<Record<Kind, THREE.InstancedMesh>>>({});
-  const applied = useRef({ gap: -1, open: -1, prevOpen: -1, floor: -2, prevFloor: -2 });
+  const applied = useRef({ gap: -1, bulgeKey: -1, open: -1, prevOpen: -1, floor: -2, prevFloor: -2 });
   const dummy = useRef(new THREE.Object3D());
   const plate = useRef(new THREE.Matrix4());
   const local = useRef(new THREE.Matrix4());
@@ -96,10 +97,12 @@ export function Interiors({
 
   useFrame(() => {
     const gap = explodeRef.current?.gap ?? 0;
+    const xs = explodeRef.current;
     const ex = extractRef.current;
     const prev = outgoingRef.current;
     const a = applied.current;
     const exploded = gap > 0.001;
+    const bulgeKey = xs ? xs.hoverAmt * 1000 + xs.hoverF : 0;
     const exFloor = ex?.floor ?? -1;
     const prevFloor = prev?.floor ?? -1;
     const open = ex?.open ?? 0;
@@ -111,6 +114,7 @@ export function Interiors({
     // Whole stack (exploded view): recompose only when the gap, the opening or the floor changes.
     if (
       Math.abs(gap - a.gap) > 0.0005 ||
+      bulgeKey !== a.bulgeKey ||
       Math.abs(open - a.open) > 0.0005 ||
       Math.abs(prevOpen - a.prevOpen) > 0.0005 ||
       exFloor !== a.floor ||
@@ -125,7 +129,9 @@ export function Interiors({
         if (exploded) {
           for (let i = 0; i < list.length; i++) {
             const it = list[i];
-            d.position.set(it.e, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + liftFor(it.f) + it.y, -it.n);
+            const bs = xs ? bulgeScale(it.f, xs) : 1;
+            const bl = xs ? bulgeLift(it.f, xs) : 0;
+            d.position.set(it.e * bs, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + liftFor(it.f) + bl + it.y, -it.n * bs);
             d.rotation.set(0, it.rot, 0);
             d.scale.set(it.sx, it.sy, it.sz);
             if (k === "liftCable") {
@@ -141,6 +147,7 @@ export function Interiors({
         mesh.instanceMatrix.needsUpdate = true;
       }
       a.gap = gap;
+      a.bulgeKey = bulgeKey;
       a.open = open;
       a.prevOpen = prevOpen;
       a.floor = exFloor;

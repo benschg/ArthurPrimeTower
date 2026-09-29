@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { Environment, OrbitControls } from "@react-three/drei";
 import { Interiors, PLATE_LIFT, type ExtractState, PLATE_TILT } from "../Interiors";
 import { floorElevation } from "../geometry";
-import { EXPLODE_GAP, AX_X, AX_Y, PLATE_YAW, type ControlsLike } from "./helpers";
+import { EXPLODE_GAP, AX_X, AX_Y, PLATE_YAW, type ControlsLike, type ExplodeState } from "./helpers";
 import type { SceneProps, UnitProps } from "./types";
 import { useHdri } from "./hdri";
 import { GlassStages } from "./glass";
@@ -19,10 +19,10 @@ export function Scene(props: SceneProps) {
   const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
   const labelFloor = selected ?? hovered;
   const [peek, setPeek] = useState(false);
-  const garageOpen = showGarage || (peek && !explode && !cleaning.active);
+  const garageOpen = showGarage || explode || (peek && !cleaning.active);
   const [skyNight, setSkyNight] = useState(night);
   const [garageMounted, setGarageMounted] = useState(false);
-  const explodeRef = useRef({ gap: 0, thin: 1 });
+  const explodeRef = useRef<ExplodeState>({ gap: 0, thin: 1, hoverF: -1, hoverAmt: 0 });
   const extractRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), spin: 0, tilt: PLATE_TILT, zoom: 1 });
   // The floor on its way back in while a newly selected one comes out.
   const outgoingRef = useRef<ExtractState>({ floor: -1, t: 0, open: 0, shift: 0, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), spin: 0, tilt: PLATE_TILT, zoom: 1 });
@@ -42,6 +42,16 @@ export function Scene(props: SceneProps) {
     const x = explodeRef.current;
     x.gap = THREE.MathUtils.damp(x.gap, explode ? EXPLODE_GAP : 0, 4, dt);
     x.thin = THREE.MathUtils.damp(x.thin, explode ? 0.12 : 1, 4, dt);
+    // dock-style bulge around the hovered floor (explode view only, not while a floor is pulled out)
+    const bulgeOn = explode && hovered !== null && selected === null && !cleaning.active;
+    if (bulgeOn && hovered !== null) {
+      x.hoverF = x.hoverAmt < 0.02 ? hovered : THREE.MathUtils.damp(x.hoverF, hovered, 10, dt);
+    }
+    x.hoverAmt = THREE.MathUtils.damp(x.hoverAmt, bulgeOn ? 1 : 0, 8, dt);
+    if (x.hoverAmt < 0.002 && !bulgeOn) {
+      x.hoverAmt = 0;
+      x.hoverF = -1;
+    }
 
     const ex = extractRef.current;
     const prev = outgoingRef.current;

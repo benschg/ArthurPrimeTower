@@ -41,23 +41,16 @@ const shot = async (name) => {
 await shot("01-hero");
 
 const click = async (label) => {
-  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}']`);
+  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}' or @aria-label='${label}']`);
   if (!btn) throw new Error("button not found: " + label);
   await btn.click();
 };
 
 await click("Rotate"); // stop auto-rotate for deterministic frames
-await click("Tenants");
-await shot("02-tenants");
-await click("Tenants");
 await click("Explode");
 await wait(2000);
 await shot("03-explode");
 await click("Explode");
-await click("Garage");
-await wait(2000);
-await shot("04-garage");
-await click("Garage");
 await click("Night");
 await wait(350);
 await page.screenshot({ path: path.join(out, "05a-night-transition.png") });

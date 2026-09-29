@@ -9,10 +9,11 @@ import { categoryLabel, profilesOnFloor } from "@/data/tenantProfiles";
 import { presentationPath } from "@/data/presentation";
 import { floorBands } from "@/data/tower";
 import { pick } from "@/i18n";
-import { LangToggle, useLang } from "@/i18n/LangContext";
+import { FlagCH, FlagUK, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 import { floorElevation, FLOORS, polygonArea, stageForFloor, TOWER_HEIGHT } from "./geometry";
 import { DayNightToggle } from "./DayNightToggle";
+import { IconExploded, IconRotate, IconStacked, IconStill, Switch } from "./viewer/Switch";
 import type { CleanState, ViewerState } from "./TowerScene";
 import { Celebration } from "./viewer/Celebration";
 import { FloorPlanLink } from "./viewer/FloorPlanLink";
@@ -24,12 +25,11 @@ const TowerScene = dynamic(() => import("./TowerScene"), {
 
 type ToggleKey = keyof Omit<ViewerState, "hovered" | "selected" | "cleaning">;
 
-const toggleKeys: ToggleKey[] = ["showTenants", "explode", "showGarage", "autoRotate"];
 
 const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 
 export function TowerViewer() {
-  const { lang } = useLang();
+  const { lang, setLang } = useLang();
   const t = ui[lang].viewer;
   const g = ui[lang].game;
 
@@ -139,31 +139,39 @@ export function TowerViewer() {
         </Link>
       </div>
 
-      {/* Controls */}
+      {/* Controls: one column of slider switches */}
       <div className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
-        <div className="mb-1 flex items-center gap-1.5">
-          <LangToggle className="glass h-9" />
-          <DayNightToggle
-            night={state.night}
-            onToggle={() => !clean.active && toggle("night")}
-            label={t.toggles.night[0]}
-            hint={t.toggles.night[1]}
-          />
-        </div>
-        {toggleKeys.map((key) => (
-          <button
-            key={key}
-            onClick={() => toggle(key)}
-            title={t.toggles[key][1]}
-            disabled={clean.active}
-            className={
-              "glass rounded-full px-3.5 py-1.5 font-mono text-xs tracking-wider uppercase transition-colors disabled:opacity-40 " +
-              (state[key] ? "text-ink !bg-accent border-accent" : "text-paper hover:text-accent")
-            }
-          >
-            {t.toggles[key][0]}
-          </button>
-        ))}
+        <Switch
+          on={lang === "de"}
+          onToggle={() => setLang(lang === "de" ? "en" : "de")}
+          label={lang === "de" ? "Sprache: Deutsch" : "Language: English"}
+          left={<FlagUK className="h-3.5 w-5 rounded-[2px] shadow-sm" />}
+          right={<FlagCH className="h-3.5 w-3.5 rounded-[2px] shadow-sm" />}
+        />
+        <Switch
+          on={state.autoRotate}
+          onToggle={() => toggle("autoRotate")}
+          label={t.toggles.autoRotate[0]}
+          hint={t.toggles.autoRotate[1]}
+          disabled={clean.active}
+          left={<IconStill />}
+          right={<IconRotate spinning={state.autoRotate} />}
+        />
+        <DayNightToggle
+          night={state.night}
+          onToggle={() => !clean.active && toggle("night")}
+          label={t.toggles.night[0]}
+          hint={t.toggles.night[1]}
+        />
+        <Switch
+          on={state.explode}
+          onToggle={() => toggle("explode")}
+          label={t.toggles.explode[0]}
+          hint={t.toggles.explode[1]}
+          disabled={clean.active}
+          left={<IconStacked />}
+          right={<IconExploded />}
+        />
       </div>
 
       {/* Bottom-left card: floor info, or the cleaning HUD */}

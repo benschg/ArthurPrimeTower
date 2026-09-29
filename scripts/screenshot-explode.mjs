@@ -23,7 +23,7 @@ await page.waitForSelector("canvas", { timeout: 60000 });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 await wait(2500);
 const click = async (label) => {
-  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}']`);
+  const [btn] = await page.$$(`xpath/.//button[normalize-space()='${label}' or @aria-label='${label}']`);
   await btn.click();
 };
 await click("Rotate");
@@ -50,6 +50,12 @@ await click("Explode");
 await wait(2600);
 await page.screenshot({ path: path.join(out, "explode-overview.png") });
 
+// dock-style bulge: hover a floor in the exploded stack
+await page.mouse.move(720, 470);
+await wait(900);
+await page.screenshot({ path: path.join(out, "explode-bulge.png") });
+await page.mouse.move(1200, 200);
+await wait(600);
 // close-up on the middle floors: look from above, then zoom to the cursor on a floor
 await page.mouse.move(720, 300);
 await page.mouse.down();

@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import type { FacadeMaterial } from "../facadeShader";
 import type { ExtractState } from "../Interiors";
 import { FLOORS, floorHeight, floorElevation, stageForFloor } from "../geometry";
-import { liftAbove, extrudeUp } from "./helpers";
+import { liftAbove, extrudeUp, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
 import type { UnitProps } from "./types";
 import { MaintenanceUnit } from "./maintenance";
 import { Roof } from "./roof";
@@ -24,7 +24,7 @@ export function GlassStages({
   dim: boolean;
   env: THREE.Texture;
   unit: UnitProps;
-  explodeRef: RefObject<{ gap: number; thin: number }>;
+  explodeRef: RefObject<ExplodeState>;
   extractRef: RefObject<ExtractState>;
   outgoingRef: RefObject<ExtractState>;
 }) {
@@ -104,7 +104,10 @@ export function GlassStages({
     if (ringsRef.current) {
       ringsRef.current.children.forEach((child, f) => {
         const ring = child as THREE.Mesh;
-        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev);
+        const xs = explodeRef.current;
+        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev) + (xs ? bulgeLift(f, xs) : 0);
+        const bs = xs ? bulgeScale(f, xs) : 1;
+        ring.scale.set(bs, 1, bs);
         const slot = f === ex.floor ? 0 : f === prev.floor ? 1 : -1;
         const fade = slot === 0 ? fadeOf(ex.t) : slot === 1 ? fadeOf(prev.t) : 1;
         if (slot >= 0 && fade < 0.999) {
