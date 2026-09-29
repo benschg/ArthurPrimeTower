@@ -83,6 +83,15 @@ void main() {
   vec3 surface = mix(dayColor, nightColor, uNight);
 
   vec3 color = surface * (1.0 - 0.55 * fresnel) + env * fresnel * uReflectivity;
+
+  // Roof and setback ledges: dark gravel membrane instead of glass on upward-facing faces.
+  float up = smoothstep(0.55, 0.85, N.y);
+  vec2 cell = floor(vWorldPos.xz * 1.5);
+  float grain = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  vec3 roof = mix(vec3(0.10, 0.11, 0.12), vec3(0.17, 0.18, 0.19), grain) * (0.75 + 0.25 * max(dot(N, uSunDir), 0.0));
+  roof = mix(roof, roof * 0.35, uNight) + env * 0.04;
+  color = mix(color, roof, up);
+
   gl_FragColor = vec4(color, uOpacity);
 
   #include <tonemapping_fragment>

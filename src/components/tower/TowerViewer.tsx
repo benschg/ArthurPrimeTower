@@ -5,6 +5,8 @@ import { useCallback, useMemo, useState } from "react";
 import { floorBands, tenants } from "@/data/tower";
 import { floorElevation, FLOORS, stageForFloor, TOWER_HEIGHT } from "./geometry";
 import type { ViewerState } from "./TowerScene";
+import { FloorPlanSvg } from "./FloorPlanSvg";
+import { planForFloor } from "./floorPlans";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -74,7 +76,7 @@ export function TowerViewer() {
       </div>
 
       {/* Controls */}
-      <div className="absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
+      <div className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
         {toggles.map((t) => (
           <button
             key={t.key}
@@ -90,8 +92,24 @@ export function TowerViewer() {
         ))}
       </div>
 
+      {/* Floor plan panel (right side, below the mode buttons) */}
+      {focus !== null && (
+        <aside className="z-20 absolute right-4 top-[15.5rem] sm:right-8 sm:top-[16rem] glass rounded-xl p-3 sm:p-4 w-[min(300px,calc(100%-2rem))] pointer-events-auto">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-accent">
+            Floor {focus === 0 ? "G" : focus} plan
+          </p>
+          <div className="mt-2 overflow-hidden rounded-md bg-ink/60 p-2 flex justify-center">
+            <FloorPlanSvg floor={focus} size={230} />
+          </div>
+          <FloorPlanLinks floor={focus} />
+          <p className="mt-2 text-[10px] text-muted leading-snug">
+            Schematic from the measured geometry. {state.selected === null ? "Click the floor to pin." : "Pinned · click again or elsewhere to release."}
+          </p>
+        </aside>
+      )}
+
       {/* Floor info card */}
-      <div className="absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
+      <div className="z-20 absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
         {focus === null ? (
           <>
             <p className="font-mono text-[11px] uppercase tracking-widest text-muted">Floor plate</p>
@@ -121,7 +139,7 @@ export function TowerViewer() {
       </div>
 
       {/* Height scale */}
-      <div className="absolute right-4 bottom-4 sm:right-8 sm:bottom-8 hidden md:flex flex-col items-end gap-1 font-mono text-[10px] text-muted pointer-events-none">
+      <div className={"absolute right-4 bottom-4 sm:right-8 sm:bottom-8 hidden lg:flex flex-col items-end gap-1 font-mono text-[10px] text-muted pointer-events-none " + (focus !== null ? "opacity-0" : "")}>
         <span>▲ {TOWER_HEIGHT.toFixed(0)} m roof</span>
         <span>118.7 m highest occupied floor</span>
         <span>6.7 m double-height lobby</span>
@@ -134,6 +152,29 @@ export function TowerViewer() {
       >
         scroll ↓
       </a>
+    </div>
+  );
+}
+
+function FloorPlanLinks({ floor }: { floor: number }) {
+  const ref = planForFloor(floor);
+  return (
+    <div className="mt-2 space-y-1.5">
+      {ref.image && (
+        <a href={ref.image.url} target="_blank" rel="noreferrer" className="group block rounded-md overflow-hidden border border-line bg-ink/60">
+          {/* Linked from gigon-guyer.ch; the drawing is theirs and is not stored here. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ref.image.url} alt={ref.image.title} loading="lazy" className="w-full h-24 object-cover object-center opacity-90 group-hover:opacity-100" />
+          <p className="px-2 py-1 text-[10px] text-muted">
+            <span className="text-paper">{ref.image.title}</span> · gigon-guyer.ch ↗{!ref.image.exact && " · nearest published plan"}
+          </p>
+        </a>
+      )}
+      {ref.pdf && (
+        <a href={ref.pdf.url} target="_blank" rel="noreferrer" className="block rounded-md border border-line px-2 py-1 text-[10px] text-muted hover:text-accent">
+          {ref.pdf.title} · primetower.ch ↗
+        </a>
+      )}
     </div>
   );
 }
