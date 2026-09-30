@@ -99,6 +99,24 @@ export const stationPlatform: Pt[] = [[21.9, -74.2], [19.5, -73.0], [52.8, -19.5
 /** Railway corridor: tracks run at bearing ~112° south-west of the tower. */
 export const railway = { center: [0, -95] as Pt, bearing: 112, length: 700, tracks: 8, spacing: 4.5 };
 
+const bearingDir = (deg: number): Pt => [Math.sin((deg * Math.PI) / 180), Math.cos((deg * Math.PI) / 180)];
+const railDir = bearingDir(railway.bearing);
+const bridgeDir = bearingDir(bridge.bearing);
+
+/** Where the bridge crosses the railway, in metres along the tracks from the corridor's centre: the station sits beneath it. */
+export const railCrossing = (() => {
+  const dx = bridge.center[0] - railway.center[0];
+  const dy = bridge.center[1] - railway.center[1];
+  return (bridgeDir[0] * dy - bridgeDir[1] * dx) / (bridgeDir[0] * railDir[1] - bridgeDir[1] * railDir[0]);
+})();
+
+/** Bridge piers every 40 m along the centreline (metres from its centre); the span over the railway stays clear. */
+export const bridgePiers = Array.from({ length: 14 }, (_, i) => -260 + i * 40).filter((x) => {
+  const e = bridge.center[0] + bridgeDir[0] * x - railway.center[0];
+  const n = bridge.center[1] + bridgeDir[1] * x - railway.center[1];
+  return Math.abs(e * railDir[1] - n * railDir[0]) > (railway.tracks * railway.spacing) / 2 + 3;
+});
+
 /** Garage: two levels under tower and plaza, ramp from Zahnradstrasse at the north-east (OSM "Parkshaus Prime Tower"). */
 export const garagePolygon: Pt[] = [
   [-42, -38], [24, -50], [46, -12], [43.1, 56.3], [19.3, 47.6], [15.0, 46.0], [-40, 18],

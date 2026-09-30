@@ -230,7 +230,7 @@ export function Scene(props: SceneProps) {
         {labelFloor !== null && !busy && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
-      <Site lang={lang} />
+      <Site lang={lang} night={night} />
       <GaragePeekTarget onChange={setPeek} />
       {garageMounted && <Garage lang={lang} />}
 

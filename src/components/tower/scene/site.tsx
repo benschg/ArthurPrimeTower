@@ -3,8 +3,9 @@ import { useMemo } from "react";
 import { Grid, Html } from "@react-three/drei";
 import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
-import { neighbours, bridge, stationPlatform, railway } from "../geometry";
+import { neighbours, bridge, bridgePiers, stationPlatform, railway } from "../geometry";
 import { extrudeUp } from "./helpers";
+import { BridgeTraffic, Trains } from "./traffic";
 
 export function Footprint({ polygon, height, color, floors, name, note }: (typeof neighbours)[number]) {
   const geo = useMemo(() => extrudeUp(polygon, height), [polygon, height]);
@@ -42,7 +43,7 @@ export function Footprint({ polygon, height, color, floors, name, note }: (typeo
   );
 }
 
-export function Site({ lang }: { lang: Lang }) {
+export function Site({ lang, night }: { lang: Lang; night: boolean }) {
   const lab = ui[lang].viewer.labels;
   const bRot = (bridge.bearing * Math.PI) / 180;
   const rRot = (railway.bearing * Math.PI) / 180;
@@ -85,8 +86,8 @@ export function Site({ lang }: { lang: Lang }) {
             <meshStandardMaterial color="#4a5663" />
           </mesh>
         ))}
-        {Array.from({ length: 14 }, (_, i) => (
-          <mesh key={i} position={[-260 + i * 40, bridge.deckHeight / 2, 0]} castShadow>
+        {bridgePiers.map((x) => (
+          <mesh key={x} position={[x, bridge.deckHeight / 2, 0]} castShadow>
             <boxGeometry args={[2.4, bridge.deckHeight, bridge.width - 8]} />
             <meshStandardMaterial color="#39434f" />
           </mesh>
@@ -94,6 +95,7 @@ export function Site({ lang }: { lang: Lang }) {
         <Html zIndexRange={[5, 0]} position={[110, bridge.deckHeight + 6, 0]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.hardbruecke}</div>
         </Html>
+        <BridgeTraffic night={night} />
       </group>
 
       {/* Bahnhof Hardbrücke platform (at ground level beneath the bridge) */}
@@ -112,6 +114,7 @@ export function Site({ lang }: { lang: Lang }) {
             <meshStandardMaterial color="#3d4956" />
           </mesh>
         ))}
+        <Trains night={night} />
       </group>
     </group>
   );
