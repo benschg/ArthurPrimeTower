@@ -208,7 +208,7 @@ export function Scene(props: SceneProps) {
       <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>
-        <GlassStages night={night} dim={dim} env={glassEnv} unit={unit} explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} />
+        <GlassStages night={night} dim={dim} lively={!busy} env={glassEnv} unit={unit} explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} />
         <Structure visible={showTenants && !explode} />
         <FloorSlices
           showTenants={showTenants}

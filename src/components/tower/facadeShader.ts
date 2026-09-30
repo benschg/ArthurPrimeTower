@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BLIND_PANES, blinds } from "./blinds";
 import { FLOORS } from "./geometry";
+import { OPEN_DEPTH, windows } from "./windows";
 
 /**
  * Glass facade shader, one ring per floor.
@@ -16,6 +17,9 @@ import { FLOORS } from "./geometry";
  *   floor, desks, ceiling lights, partitions and a back wall, seen through the tinted glass
  *   (Beer-Lambert absorption, longer path at grazing angles). Spandrels and mullions hide
  *   the slab edge; some panes have blinds.
+ * - Some windows are open: pushed out parallel to the facade. The pane keeps its reflection;
+ *   what shows is the dark slit behind the edges nearer the viewer, as wide as the viewing
+ *   angle makes 6 cm look.
  * - Output is premultiplied so reflections stay when the glass fades (tenants/explode).
  */
 
@@ -50,9 +54,10 @@ uniform vec3 uF0;
 uniform vec3 uGlassTint;
 uniform vec3 uGround;
 uniform sampler2D uBlinds; // one byte per pane per floor, 0 = raised, 255 = fully lowered
-uniform vec2 uBlindsSize; // (panes, floors)
+uniform vec2 uBlindsSize; // (panes, floors), shared by uBlinds and uWindows
 uniform vec3 uBlindColor;
 uniform float uBlindGlow;
+uniform sampler2D uWindows; // one byte per pane per floor, 0 = shut, 255 = pushed out by OPEN_DEPTH
 
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
@@ -71,6 +76,7 @@ layout(location = 0) out highp vec4 fragColor;
 #define ROOM_D 7.5
 #define SPANDREL 0.47
 #define MULLION 0.04
+#define OPEN_DEPTH ${OPEN_DEPTH.toFixed(3)}
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -94,6 +100,18 @@ float lines(float d, float p, float w) {
   float x = abs(fract(d / p + 0.5) - 0.5) * p;
   float cov = 1.0 - smoothstep(w - fw, w + fw, x);
   return mix(cov, 2.0 * w / p, smoothstep(0.25, 0.8, fw / p));
+}
+
+/** How far the window at (pane, floor) is pushed out, 0..1; nothing opens beyond the tower. */
+float windowOpen(float pane, float fl) {
+  float inside = step(0.0, fl) * step(fl, uBlindsSize.y - 1.0);
+  return texture2D(uWindows, (vec2(mod(pane, uBlindsSize.x), fl) + 0.5) / uBlindsSize).r * inside;
+}
+
+/** Share of a pixel of width fw centred on x that lies in the band from 0 to w. */
+float bandCover(float x, float w, float fw) {
+  fw = max(fw, 1e-4);
+  return clamp((min(x + 0.5 * fw, w) - max(x - 0.5 * fw, 0.0)) / fw, 0.0, 1.0);
 }
 
 /** Environment along a direction: prefiltered sky above the horizon, a ground plane below. */
@@ -186,9 +204,13 @@ void main() {
   float v = vUv.y;
 
   // Per-pane tilt plus a slight pillow bow: breaks the reflection up pane by pane.
-  vec2 paneId = vec2(floor(u / PANE_W), floorIdx);
+  float pane = floor(u / PANE_W);
+  vec2 paneId = vec2(pane, floorIdx);
   vec2 pf = vec2(fract(u / PANE_W), v / floorH) - 0.5;
   vec2 tilt = (hash22(paneId) - 0.5) * 0.014 + pf * vec2(0.012, 0.006);
+  // An open window hangs on its stays a touch out of true, so its reflection sits a little off.
+  float open0 = windowOpen(pane, floorIdx);
+  tilt += (hash22(paneId + 41.0) - 0.5) * 0.012 * open0;
   vec3 N = normalize(Ng + (T * tilt.x + vec3(0.0, 1.0, 0.0) * tilt.y) * wall);
 
   float NdV = clamp(dot(N, V), 1e-3, 1.0);
@@ -216,7 +238,7 @@ void main() {
   vec3 room = interior(vec3(u, min(v, roomH - 1e-3), 0.0), rd, floorIdx, roomH, lit);
 
   // blinds: per-pane amount from the controller's texture (row = floor, column = pane)
-  float bpane = mod(floor(u / PANE_W), uBlindsSize.x);
+  float bpane = mod(pane, uBlindsSize.x);
   float bl = texture2D(uBlinds, (vec2(bpane, floorIdx) + 0.5) / uBlindsSize).r;
   float blindTo = roomH * (1.0 - bl);
   float blind = step(0.004, bl) * step(blindTo, v) * (1.0 - step(roomH, v));
@@ -240,6 +262,20 @@ void main() {
   float sun = 0.5 + 0.5 * max(dot(Ng, L), 0.0);
   vec3 mullCol = vec3(0.035, 0.07, 0.065) * sun * mix(1.0, 0.25, uNight) + environment(P, reflect(-V, Ng), 0.5) * 0.06;
 
+  // Open windows stand up to OPEN_DEPTH proud of the facade. Looking along the wall, the gap
+  // behind a pane's nearer edges shows as a dark slit, tan(viewing angle) x the depth wide. A
+  // pane in front that is out just as far hides it, so only the step up from that one counts.
+  vec2 slope = clamp(rd.xy / rd.z, -5.0, 5.0);
+  float stepU = max(open0 - windowOpen(pane - sign(slope.x), floorIdx), 0.0);
+  float stepV = max(open0 - windowOpen(pane, floorIdx - sign(slope.y)), 0.0);
+  float pu = u - pane * PANE_W;
+  float nearU = slope.x > 0.0 ? pu - MULLION : PANE_W - MULLION - pu;
+  float nearV = slope.y > 0.0 ? v : floorH - v;
+  float slitU = bandCover(nearU, abs(slope.x) * OPEN_DEPTH * stepU, fwidth(u));
+  float slitV = bandCover(nearV, abs(slope.y) * OPEN_DEPTH * stepV, fwidth(v));
+  float slit = (1.0 - (1.0 - slitU) * (1.0 - slitV)) * wall;
+  vec3 slitCol = vec3(0.006, 0.009, 0.01);
+
   // Roof and setback ledges: dark gravel membrane instead of glass on upward-facing faces.
   float up = smoothstep(0.55, 0.85, Ng.y);
   vec2 cell = floor(P.xz * 1.5);
@@ -255,6 +291,7 @@ void main() {
   float keep = mix(0.45, 1.0, alpha);
   vec3 color = glass * alpha + refl * keep;
   color = mix(color, mullCol * alpha + refl * 0.15 * keep, mull);
+  color = mix(color, slitCol * alpha, slit);
   color = mix(color, roof * alpha, up);
   color = mix(color, soffit * alpha, down);
 
@@ -281,6 +318,7 @@ export type FacadeUniforms = {
   uBlindsSize: { value: THREE.Vector2 };
   uBlindColor: { value: THREE.Color };
   uBlindGlow: { value: number };
+  uWindows: { value: THREE.Texture };
 };
 
 export function createFacadeUniforms(): FacadeUniforms {
@@ -302,6 +340,7 @@ export function createFacadeUniforms(): FacadeUniforms {
     uBlindsSize: { value: new THREE.Vector2(BLIND_PANES, FLOORS) },
     uBlindColor: { value: new THREE.Color(0.5, 0.49, 0.46) },
     uBlindGlow: { value: 0 },
+    uWindows: { value: windows.texture },
   };
 }
 

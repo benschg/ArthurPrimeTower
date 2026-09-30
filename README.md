@@ -41,6 +41,15 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   `setAll(1)`, `setFloor(24, 1)`, `setFacade(21, 3, 0.6)` (edge index as in `geometry`, 3 = Hardbrücke side),
   `set(f, pane, amount)`, `map((floor, pane, edge) => amount)`, `setFromSun([east, north])`, `randomize()`;
   add `.snap()` to skip the glide. `node scripts/probe-blinds.mjs` exercises all of it.
+- **Opening windows** (`src/components/tower/windows.ts`): every second or third element opens parallel to the
+  facade, 6 cm out. The shader draws the dark slit behind the edges nearer the viewer, so the slits widen as you
+  look along a facade and vanish head-on. Same data texture layout and setters as the blinds
+  (`src/components/tower/paneField.ts` holds the shared part), with 1 = fully out; panes that do not open ignore
+  the setters. Scriptable as `primeTower.windows`: `setAll(1)`, `setAll(0)`, `setFloor(24, 1)`, `randomize(0.5)`,
+  `openable(f, pane)`.
+- **Facade life** (`src/components/tower/facadeLife.ts`): every few seconds a window somewhere opens or shuts and
+  the blinds of a room move, keeping the overall share of each. It rests while a game owns the facade;
+  `primeTower.life.paused = true` freezes it for scripting.
 - **Type the tower** (`src/components/tower/typing/`): click the "P" of the title. The camera squares up to the
   tower's three-faced west flank, where three characters are drawn with the blinds as a 5 x 7 dot matrix, one per
   face, with double-width dots (floors 26 to 32, amber glow so they read by day and night). Type them and the next three glide in. Rounds shorten from 10 s toward 3.5 s

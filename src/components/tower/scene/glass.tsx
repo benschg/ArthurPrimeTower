@@ -1,5 +1,7 @@
 import { createFacadeMaterial, cubeUVDefines } from "../facadeShader";
 import { blinds } from "../blinds";
+import { windows } from "../windows";
+import { facadeLife } from "../facadeLife";
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
@@ -15,6 +17,7 @@ import { DAY_GROUND, NIGHT_GROUND } from "./blender";
 export function GlassStages({
   night,
   dim,
+  lively,
   env,
   unit,
   explodeRef,
@@ -23,6 +26,8 @@ export function GlassStages({
 }: {
   night: boolean;
   dim: boolean;
+  /** windows and blinds change by themselves now and then (off while a game owns the facade) */
+  lively: boolean;
   env: THREE.Texture;
   unit: UnitProps;
   explodeRef: RefObject<ExplodeState>;
@@ -73,7 +78,9 @@ export function GlassStages({
   }, [env]);
 
   useFrame((_, dt) => {
+    if (lively) facadeLife.update(dt);
     blinds.update(dt);
+    windows.update(dt);
     const gap = explodeRef.current?.gap ?? 0;
     const ex = extractRef.current;
     const prev = outgoingRef.current;

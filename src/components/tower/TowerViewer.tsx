@@ -13,6 +13,8 @@ import { FlagCH, FlagUK, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 import { floorElevation, FLOORS, polygonArea, stageForFloor, TOWER_HEIGHT } from "./geometry";
 import { blinds, type Blinds } from "./blinds";
+import { windows, type Windows } from "./windows";
+import { facadeLife, type FacadeLife } from "./facadeLife";
 import { DayNightToggle } from "./DayNightToggle";
 import { IconExploded, IconRotate, IconStacked, IconStill, Switch } from "./viewer/Switch";
 import type { CleanState, ViewerState } from "./TowerScene";
@@ -38,8 +40,8 @@ const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 
 declare global {
   interface Window {
-    /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) in the console. */
-    primeTower?: { blinds: Blinds; cannons: typeof confettiCannons; pacman: Pacman; typingChars: () => string; typingState: () => TypingState };
+    /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) or primeTower.windows.setAll(1) in the console. */
+    primeTower?: { blinds: Blinds; windows: Windows; life: FacadeLife; cannons: typeof confettiCannons; pacman: Pacman; typingChars: () => string; typingState: () => TypingState };
   }
 }
 
@@ -108,7 +110,7 @@ export function TowerViewer() {
   const typingGame = useTypingGame(quitTyping);
   const typingState = typingGame.game;
   useEffect(() => {
-    window.primeTower = { blinds, cannons: confettiCannons, pacman, typingChars: () => typingState.chars, typingState: () => typingState };
+    window.primeTower = { blinds, windows, life: facadeLife, cannons: confettiCannons, pacman, typingChars: () => typingState.chars, typingState: () => typingState };
     return () => {
       delete window.primeTower;
     };
