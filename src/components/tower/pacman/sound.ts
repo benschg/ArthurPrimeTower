@@ -8,7 +8,7 @@ import type { PacEvent } from "./game";
 const MUTE_KEY = "prime-tower-pacman-muted";
 const VOLUME = 0.22;
 
-type Note = { f: number; to?: number; at: number; dur: number; type?: OscillatorType; gain?: number };
+export type Note = { f: number; to?: number; at: number; dur: number; type?: OscillatorType; gain?: number };
 
 class Sound {
   muted = false;
@@ -49,7 +49,8 @@ class Sound {
     return this.ctx;
   }
 
-  private notes(notes: Note[]): void {
+  /** Play a few oscillator notes; the other games bring their own. */
+  notes(notes: Note[]): void {
     if (this.muted) return;
     const ctx = this.context();
     if (!ctx) return;

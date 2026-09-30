@@ -25,9 +25,9 @@ const BOARD_TILT = 1.3;
 const VIEW_SHIFT = 0.17;
 
 export function Scene(props: SceneProps) {
-  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, pacman, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
+  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, pacman, crossing, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit, onStartCrossing, onHoverBridge } = props;
   // a game owns the facade, the camera and the pointer
-  const busy = cleaning.active || typing;
+  const busy = cleaning.active || typing || crossing;
   const labelFloor = selected ?? hovered;
   const [peek, setPeek] = useState(false);
   const garageOpen = showGarage || explode || (peek && !busy);
@@ -230,7 +230,7 @@ export function Scene(props: SceneProps) {
         {labelFloor !== null && !busy && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
-      <Site lang={lang} night={night} />
+      <Site lang={lang} night={night} interactive={!busy} onStartCrossing={onStartCrossing} onHoverBridge={onHoverBridge} />
       <GaragePeekTarget onChange={setPeek} />
       {garageMounted && <Garage lang={lang} />}
 
@@ -247,7 +247,7 @@ export function Scene(props: SceneProps) {
         maxPolarAngle={showGarage ? Math.PI * 0.64 : Math.PI * 0.495}
         target={[0, 58, 0]}
       />
-      <CameraRig showGarage={showGarage} explode={explode} facing={cleaning.active ? "cleaning" : typing ? "typing" : "none"} controlsRef={controlsRef} />
+      <CameraRig showGarage={showGarage} explode={explode} facing={cleaning.active ? "cleaning" : typing ? "typing" : crossing ? "crossing" : "none"} controlsRef={controlsRef} />
     </>
   );
 }

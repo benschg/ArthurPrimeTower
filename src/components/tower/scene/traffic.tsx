@@ -3,10 +3,13 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { bridge, railway, railCrossing } from "../geometry";
+import { crossing } from "../crossing/store";
+import { BUS, CAR, DECK_TOP, KINDS, LANE_Z, LOOP, MAX_PER_LANE, road, VAN } from "../crossing/road";
 
 const GLASS = "#12171d";
 const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
+const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /** A box [length, height, width] centred at `at`, in one vertex colour. Vehicles point along +x. */
 function part(size: [number, number, number], at: [number, number, number], color: string): THREE.BufferGeometry {
@@ -35,59 +38,23 @@ function useNight(night: boolean) {
 
 // ── Road traffic on the Hardbrücke ──────────────────────────────────────────────
 
-const DECK_TOP = bridge.deckHeight + 0.75;
-/** Vehicles run the length of the deck and come back on at the other end. */
-const LOOP = bridge.length;
-const MIN_GAP = 3; // metres bumper to bumper at a standstill
-const HEADWAY = 1.3; // seconds kept to the vehicle ahead
-
-type Kind = {
-  len: number;
-  width: number;
-  lampY: number;
-  /** cruising speed range, m/s */
-  speed: [number, number];
-  /** body colours; the geometry's own colours are multiplied by these */
-  colors: string[];
-  geometry: () => THREE.BufferGeometry;
-};
-
-const CAR: Kind = {
-  len: 4.4,
-  width: 1.8,
-  lampY: 0.68,
-  speed: [11.5, 16],
-  colors: ["#e8ecef", "#d5dade", "#b9c1c8", "#8e979f", "#5d666f", "#2a3037", "#1b1f24", "#23344d", "#3d5a80", "#8c2f2a", "#6d7a63"],
-  geometry: () =>
+/** The model of each kind of vehicle (see KINDS in crossing/road.ts for their sizes). */
+const MODELS: Record<number, () => THREE.BufferGeometry> = {
+  [CAR]: () =>
     mergeGeometries([
       part([3.7, 0.4, 1.7], [0, 0.2, 0], "#0c0f13"), // wheels, as a dark skirt
       part([4.4, 0.65, 1.8], [0, 0.62, 0], "#ffffff"),
       part([2.4, 0.55, 1.62], [-0.3, 1.22, 0], GLASS),
+      part([2.1, 0.06, 1.5], [-0.3, 1.52, 0], "#ffffff"), // roof
     ])!,
-};
-
-const VAN: Kind = {
-  len: 5.6,
-  width: 2,
-  lampY: 0.75,
-  speed: [11, 14],
-  colors: ["#e8ecef", "#e8ecef", "#c9d0d6", "#f2c14e", "#4a5560"],
-  geometry: () =>
+  [VAN]: () =>
     mergeGeometries([
       part([4.8, 0.45, 1.9], [0, 0.22, 0], "#0c0f13"),
       part([5.6, 1.9, 2], [0, 1.3, 0], "#ffffff"),
       part([1.3, 0.7, 2.04], [2.17, 1.75, 0], GLASS), // cab windows, wrapping the front
     ])!,
-};
-
-/** A VBZ bus: white over blue, in the bus lane. */
-const BUS: Kind = {
-  len: 12,
-  width: 2.5,
-  lampY: 0.8,
-  speed: [9.5, 11],
-  colors: ["#ffffff"],
-  geometry: () =>
+  // a VBZ bus: white over blue
+  [BUS]: () =>
     mergeGeometries([
       part([10.6, 0.5, 2.4], [0, 0.25, 0], "#0c0f13"),
       part([12, 2.7, 2.5], [0, 1.7, 0], "#e8ecef"),
@@ -96,65 +63,8 @@ const BUS: Kind = {
     ])!,
 };
 
-const KINDS = [CAR, VAN, BUS];
-
-/**
- * One carriageway from the median outwards: two lanes of cars and vans, then the bus lane.
- * Each entry is the kind of one vehicle (an index into KINDS). Swiss traffic keeps right,
- * so the carriageway heading along the bridge's bearing is on its +z side; the other mirrors it.
- */
-const CARRIAGEWAY = [
-  { z: 3, kinds: [0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  { z: 6.6, kinds: [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0] },
-  { z: 10.2, kinds: [2] },
-];
-const KIND_COUNT = KINDS.map((_, k) => 2 * CARRIAGEWAY.reduce((n, lane) => n + lane.kinds.filter((x) => x === k).length, 0));
-const VEHICLES = KIND_COUNT.reduce((a, b) => a + b, 0);
-
-type Vehicle = {
-  kind: number;
-  /** instance index in its kind's mesh */
-  slot: number;
-  /** instance index in the shared lamp and light-pool meshes */
-  id: number;
-  /** metres along the lane, 0..LOOP */
-  p: number;
-  v: number;
-  /** the speed it would drive on an empty road */
-  want: number;
-  len: number;
-  sx: number;
-  sy: number;
-};
-type Lane = { z: number; dir: 1 | -1; list: Vehicle[] };
-
-/** Fill the lanes, spaced out with some jitter; each `list` is sorted back to front. */
-function createLanes(): Lane[] {
-  const slots = KINDS.map(() => 0);
-  let id = 0;
-  return ([1, -1] as const).flatMap((dir) =>
-    CARRIAGEWAY.map((lane) => {
-      const n = lane.kinds.length;
-      const list = lane.kinds.map((kind, i): Vehicle => {
-        const k = KINDS[kind];
-        const sx = kind === 0 ? rand(0.9, 1.1) : 1;
-        const want = rand(...k.speed);
-        return {
-          kind,
-          slot: slots[kind]++,
-          id: id++,
-          p: ((i + rand(0.15, 0.85)) * LOOP) / n,
-          v: want,
-          want,
-          len: k.len * sx,
-          sx,
-          sy: kind === 0 ? rand(0.92, 1.14) : 1,
-        };
-      });
-      return { z: dir * lane.z, dir, list };
-    }),
-  );
-}
+/** Room in the instanced meshes: every lane full, of whichever kinds. */
+const CAPACITY = 2 * LANE_Z.length * MAX_PER_LANE;
 
 const DASH = 9; // one 3 m dash every 9 m
 const DASHES = Math.floor(bridge.length / DASH);
@@ -222,12 +132,12 @@ const POOL_LEN = 12;
 
 /**
  * Cars, vans and the odd bus crossing the Hardbrücke; a child of the bridge's group, so +x
- * runs along the deck. Each lane is a ring: vehicles keep their own pace, slow down behind
- * slower ones and come back on at the start in a new colour. One InstancedMesh per kind,
- * plus one for the lamps and one for the headlight pools that fade in at night.
+ * runs along the deck. The road itself (crossing/road.ts) moves them; this steps it and
+ * draws what it holds: one InstancedMesh per kind, plus one for the lamps and one for the
+ * headlight pools that fade in at night.
  */
 export function BridgeTraffic({ night }: { night: boolean }) {
-  const geos = useMemo(() => KINDS.map((k) => k.geometry()), []);
+  const geos = useMemo(() => KINDS.map((_, k) => MODELS[k]()), []);
   const lampGeo = useMemo(() => lampGeometry(), []);
   const poolGeo = useMemo(() => new THREE.PlaneGeometry(POOL_LEN, 5).rotateX(-Math.PI / 2), []);
   const poolTex = usePoolTexture();
@@ -236,7 +146,7 @@ export function BridgeTraffic({ night }: { night: boolean }) {
   const pools = useRef<THREE.InstancedMesh>(null);
   const lampMat = useRef<THREE.MeshBasicMaterial>(null);
   const poolMat = useRef<THREE.MeshBasicMaterial>(null);
-  const sim = useRef<{ lanes: Lane[]; dummy: THREE.Object3D; tint: THREE.Color } | null>(null);
+  const scratch = useRef({ dummy: new THREE.Object3D(), tint: new THREE.Color(), used: KINDS.map(() => 0) });
   const nightAmt = useNight(night);
 
   useFrame((_, rawDt) => {
@@ -245,66 +155,50 @@ export function BridgeTraffic({ night }: { night: boolean }) {
     const poolMesh = pools.current;
     if (!lampMesh || !poolMesh || !lampMat.current || !poolMat.current || KINDS.some((_, k) => !meshes[k])) return;
     const dt = Math.min(rawDt, 0.1);
-    // First frame: fill the lanes; every vehicle still needs its colour.
-    const fresh = !sim.current;
-    const s = (sim.current ??= { lanes: createLanes(), dummy: new THREE.Object3D(), tint: new THREE.Color() });
-    const paint = (c: Vehicle) => {
-      const m = meshes[c.kind]!;
-      m.setColorAt(c.slot, s.tint.set(pick(KINDS[c.kind].colors)));
-      m.instanceColor!.needsUpdate = true;
-    };
-    if (fresh) for (const lane of s.lanes) lane.list.forEach(paint);
+    road.step(dt);
+    crossing.frame(dt); // the game on the bridge, if one is on, goes by where the vehicles now are
 
     const nt = nightAmt(dt);
     lampMat.current.color.setScalar(THREE.MathUtils.lerp(0.6, 1, nt));
     poolMat.current.opacity = 0.5 * nt;
     poolMesh.visible = nt > 0.01;
 
-    const d = s.dummy;
-    for (const lane of s.lanes) {
-      const list = lane.list;
-      const n = list.length;
-      for (let i = 0; i < n; i++) {
-        const c = list[i];
-        let target = c.want;
-        if (n > 1) {
-          const lead = list[(i + 1) % n];
-          const gap = lead.p - lead.len / 2 - (c.p + c.len / 2) + (i === n - 1 ? LOOP : 0);
-          target = Math.min(target, Math.max(0, (gap - MIN_GAP) / HEADWAY));
-        }
-        c.v += THREE.MathUtils.clamp(target - c.v, -7 * dt, 2.2 * dt);
-        c.p += c.v * dt;
-      }
-      // Only the front vehicle can run off the end: it comes back on at the start as another one.
-      const front = list[n - 1];
-      if (front.p >= LOOP) {
-        front.p -= LOOP;
-        front.want = rand(...KINDS[front.kind].speed);
-        paint(front);
-        list.unshift(list.pop()!);
-      }
-
-      for (const c of list) {
+    const { dummy: d, tint, used } = scratch.current;
+    used.fill(0);
+    let all = 0;
+    for (const lane of road.lanes) {
+      for (const c of lane.list) {
+        if (all >= CAPACITY) break;
         const k = KINDS[c.kind];
+        const mesh = meshes[c.kind]!;
+        const slot = used[c.kind]++;
         const x = lane.dir * (c.p - LOOP / 2);
-        // grow out of / shrink into the ends of the deck
-        const grow = THREE.MathUtils.smoothstep(Math.min(c.p, LOOP - c.p), 0, 7);
+        // grow out of / shrink into the ends of the deck, or a gap in the traffic
+        const grow = THREE.MathUtils.smoothstep(Math.min(c.p, LOOP - c.p), 0, 7) * smooth(c.shown);
         d.rotation.y = lane.dir > 0 ? 0 : Math.PI;
         d.position.set(x, DECK_TOP, lane.z);
         d.scale.set(c.sx * grow, c.sy * grow, grow);
         d.updateMatrix();
-        meshes[c.kind]!.setMatrixAt(c.slot, d.matrix);
+        mesh.setMatrixAt(slot, d.matrix);
+        mesh.setColorAt(slot, tint.setHex(c.tint));
         d.position.y = DECK_TOP + k.lampY * c.sy * grow;
         d.scale.set(c.len * grow, c.sy * grow, k.width * grow);
         d.updateMatrix();
-        lampMesh.setMatrixAt(c.id, d.matrix);
+        lampMesh.setMatrixAt(all, d.matrix);
         d.position.set(x + lane.dir * (c.len / 2 + POOL_LEN / 2 - 1.2), DECK_TOP + 0.07, lane.z);
         d.scale.setScalar(grow);
         d.updateMatrix();
-        poolMesh.setMatrixAt(c.id, d.matrix);
+        poolMesh.setMatrixAt(all, d.matrix);
+        all++;
       }
     }
-    for (const m of meshes) if (m) m.instanceMatrix.needsUpdate = true;
+    KINDS.forEach((_, k) => {
+      const m = meshes[k]!;
+      m.count = used[k];
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    });
+    lampMesh.count = poolMesh.count = all;
     lampMesh.instanceMatrix.needsUpdate = true;
     poolMesh.instanceMatrix.needsUpdate = true;
   });
@@ -318,7 +212,7 @@ export function BridgeTraffic({ night }: { night: boolean }) {
           ref={(m) => {
             bodies.current[k] = m;
           }}
-          args={[geos[k], undefined, KIND_COUNT[k]]}
+          args={[geos[k], undefined, CAPACITY]}
           frustumCulled={false}
           castShadow
           receiveShadow
@@ -326,10 +220,10 @@ export function BridgeTraffic({ night }: { night: boolean }) {
           <meshStandardMaterial vertexColors roughness={0.45} metalness={0.25} />
         </instancedMesh>
       ))}
-      <instancedMesh ref={lamps} args={[lampGeo, undefined, VEHICLES]} frustumCulled={false}>
+      <instancedMesh ref={lamps} args={[lampGeo, undefined, CAPACITY]} frustumCulled={false}>
         <meshBasicMaterial ref={lampMat} vertexColors toneMapped={false} />
       </instancedMesh>
-      <instancedMesh ref={pools} args={[poolGeo, undefined, VEHICLES]} frustumCulled={false} visible={false}>
+      <instancedMesh ref={pools} args={[poolGeo, undefined, CAPACITY]} frustumCulled={false} visible={false}>
         <meshBasicMaterial ref={poolMat} map={poolTex} color="#ffe6bd" transparent opacity={0} blending={THREE.AdditiveBlending} depthWrite={false} />
       </instancedMesh>
     </group>

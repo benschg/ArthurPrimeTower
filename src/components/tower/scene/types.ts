@@ -16,12 +16,16 @@ export type ViewerState = {
 export type SceneProps = ViewerState & {
   /** the floor-13 game is on: that floor's plate is the board */
   pacman: boolean;
+  /** the Hardbrücke game is on: it has the bridge and the camera */
+  crossing: boolean;
   lang: Lang;
   onHover: (floor: number | null) => void;
   onSelect: (floor: number | null) => void;
   onStartCleaning: () => void;
   onCleanProgress: (progress: number, secondsLeft: number) => void;
   onHoverUnit: (v: boolean) => void;
+  onStartCrossing: () => void;
+  onHoverBridge: (v: boolean) => void;
 };
 
 export type CleanState = {

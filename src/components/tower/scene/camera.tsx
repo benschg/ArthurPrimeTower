@@ -6,6 +6,7 @@ import { EDGE_SE, edgeOutwardNormal, stages } from "../geometry";
 import type { ControlsLike } from "./helpers";
 import { useFacadeFrame } from "./maintenance";
 import { TYPING_FOCUS_Y, TYPING_VIEW } from "../typing/game";
+import { crossingView } from "./crossing";
 
 /**
  * Eases the orbit target and camera distance when a mode changes (garage → look low,
@@ -19,8 +20,8 @@ export function CameraRig({
 }: {
   showGarage: boolean;
   explode: boolean;
-  /** square up to the Hardbruecke facade for a game */
-  facing: "none" | "cleaning" | "typing";
+  /** square up to the Hardbruecke facade for a game, or look down on the bridge for the one played there */
+  facing: "none" | "cleaning" | "typing" | "crossing";
   controlsRef: RefObject<ControlsLike | null>;
 }) {
   const size = useThree((st) => st.size);
@@ -54,6 +55,17 @@ export function CameraRig({
     const c = controlsRef.current;
     if (!c) return;
     const camera = st.camera;
+    if (facing === "crossing") {
+      const view = crossingView(portrait);
+      c.target.x = THREE.MathUtils.damp(c.target.x, view.target[0], 3, dt);
+      c.target.y = THREE.MathUtils.damp(c.target.y, view.target[1], 3, dt);
+      c.target.z = THREE.MathUtils.damp(c.target.z, view.target[2], 3, dt);
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, view.camera[0], 3, dt);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, view.camera[1], 3, dt);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, view.camera[2], 3, dt);
+      c.update();
+      return;
+    }
     if (facing !== "none") {
       // Square up to a game's surface: the cleaning facade, or the three-faced flank the
       // typing game writes on (far enough back to take in all three faces).

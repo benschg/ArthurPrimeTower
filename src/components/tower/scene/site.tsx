@@ -6,6 +6,7 @@ import { ui } from "@/i18n/ui";
 import { neighbours, bridge, bridgePiers, stationPlatform, railway } from "../geometry";
 import { extrudeUp } from "./helpers";
 import { BridgeTraffic, Trains } from "./traffic";
+import { CrossingFrog } from "./crossing";
 
 export function Footprint({ polygon, height, color, floors, name, note }: (typeof neighbours)[number]) {
   const geo = useMemo(() => extrudeUp(polygon, height), [polygon, height]);
@@ -43,7 +44,20 @@ export function Footprint({ polygon, height, color, floors, name, note }: (typeo
   );
 }
 
-export function Site({ lang, night }: { lang: Lang; night: boolean }) {
+export function Site({
+  lang,
+  night,
+  interactive,
+  onStartCrossing,
+  onHoverBridge,
+}: {
+  lang: Lang;
+  night: boolean;
+  /** no game has the scene: a click on the bridge may start the one played there */
+  interactive: boolean;
+  onStartCrossing: () => void;
+  onHoverBridge: (v: boolean) => void;
+}) {
   const lab = ui[lang].viewer.labels;
   const bRot = (bridge.bearing * Math.PI) / 180;
   const rRot = (railway.bearing * Math.PI) / 180;
@@ -76,7 +90,19 @@ export function Site({ lang, night }: { lang: Lang; night: boolean }) {
 
       {/* Hardbrücke elevated road. Rotation about Y by -bearing aligns local +x with the compass bearing. */}
       <group position={[bridge.center[0], 0, -bridge.center[1]]} rotation={[0, Math.PI / 2 - bRot, 0]}>
-        <mesh position={[0, bridge.deckHeight, 0]} castShadow receiveShadow>
+        {/* The deck: click it to play the crossing game (a drag that ends here is an orbit, not a click) */}
+        <mesh
+          position={[0, bridge.deckHeight, 0]}
+          castShadow
+          receiveShadow
+          onClick={(e) => {
+            if (!interactive || e.delta > 4) return;
+            e.stopPropagation();
+            onStartCrossing();
+          }}
+          onPointerOver={() => interactive && onHoverBridge(true)}
+          onPointerOut={() => onHoverBridge(false)}
+        >
           <boxGeometry args={[bridge.length, 1.5, bridge.width]} />
           <meshStandardMaterial color="#2c3641" roughness={0.9} />
         </mesh>
@@ -96,6 +122,7 @@ export function Site({ lang, night }: { lang: Lang; night: boolean }) {
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.hardbruecke}</div>
         </Html>
         <BridgeTraffic night={night} />
+        <CrossingFrog />
       </group>
 
       {/* Bahnhof Hardbrücke platform (at ground level beneath the bridge) */}

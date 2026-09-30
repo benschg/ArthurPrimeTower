@@ -103,6 +103,11 @@ const bearingDir = (deg: number): Pt => [Math.sin((deg * Math.PI) / 180), Math.c
 const railDir = bearingDir(railway.bearing);
 const bridgeDir = bearingDir(bridge.bearing);
 
+/** A point on the bridge, `along` its centreline from the centre and `across` to the right of that, as (East, North). */
+export function bridgePoint(along: number, across: number): Pt {
+  return [bridge.center[0] + bridgeDir[0] * along + bridgeDir[1] * across, bridge.center[1] + bridgeDir[1] * along - bridgeDir[0] * across];
+}
+
 /** Where the bridge crosses the railway, in metres along the tracks from the corridor's centre: the station sits beneath it. */
 export const railCrossing = (() => {
   const dx = bridge.center[0] - railway.center[0];

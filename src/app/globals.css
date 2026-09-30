@@ -194,10 +194,115 @@ body {
   }
 }
 
-/* Floor-13 game: the board takes the middle of the view, where the site's labels would sit on it */
+/* A game in the middle of the view (floor 13 as a board, the bridge): the site's labels would sit on it */
 .site-label {
   transition: opacity 0.4s ease;
 }
-[data-game="pacman"] .site-label {
+[data-game] .site-label {
   opacity: 0;
+}
+
+/* Hardbrücke game: the warning sign drops in with a bounce, then keeps wobbling and pulsing
+   so that nobody misses it; its hazard stripes run, its frog bobs, blinks and waves a stop sign */
+@keyframes cross-drop {
+  0% {
+    transform: translateY(-160%) rotate(-9deg) scale(0.6);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(8%) rotate(3deg) scale(1.07);
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(-3%) rotate(-2.5deg) scale(0.98);
+  }
+  100% {
+    transform: translateY(0) rotate(-1.4deg) scale(1);
+  }
+}
+@keyframes cross-wobble {
+  0%,
+  100% {
+    transform: rotate(-1.4deg) scale(1);
+  }
+  50% {
+    transform: rotate(1.4deg) scale(1.035);
+  }
+}
+@keyframes cross-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 217 26 / 0.7), 0 18px 40px rgb(0 0 0 / 0.55);
+  }
+  60% {
+    box-shadow: 0 0 0 16px rgb(255 217 26 / 0), 0 18px 40px rgb(0 0 0 / 0.55);
+  }
+}
+@keyframes cross-stripes {
+  to {
+    background-position: 28px 0;
+  }
+}
+@keyframes cross-bob {
+  0%,
+  100% {
+    transform: translateY(2px) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(5deg);
+  }
+}
+@keyframes cross-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes cross-wave {
+  0%,
+  100% {
+    transform: rotate(-9deg);
+  }
+  50% {
+    transform: rotate(11deg);
+  }
+}
+.cross-sign {
+  transform: rotate(-1.4deg);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.55);
+  animation:
+    cross-drop 0.75s cubic-bezier(0.2, 0.9, 0.3, 1.15) both,
+    cross-wobble 1.5s ease-in-out 0.75s infinite,
+    cross-glow 1.5s ease-out 0.75s infinite;
+}
+.cross-stripes {
+  background-image: linear-gradient(-45deg, #10151b 25%, #ffd91a 25%, #ffd91a 50%, #10151b 50%, #10151b 75%, #ffd91a 75%);
+  background-size: 28px 28px;
+  animation: cross-stripes 0.7s linear infinite;
+}
+.cross-bob {
+  animation: cross-bob 0.9s ease-in-out infinite;
+}
+.cross-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cross-blink 3.2s ease-in-out infinite;
+}
+.cross-wave {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cross-wave 0.9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cross-sign,
+  .cross-stripes,
+  .cross-bob,
+  .cross-blink,
+  .cross-wave {
+    animation: none;
+  }
 }
