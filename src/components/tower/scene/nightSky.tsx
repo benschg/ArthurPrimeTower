@@ -136,11 +136,16 @@ function starField() {
       varying float vAlpha;
       void main() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        // a slow, slight twinkle, each star on its own beat
-        float tw = 1.0 + 0.28 * sin(uTime * (0.8 + 1.9 * aPhase) + aPhase * 60.0);
-        vAlpha = aBright * tw * uFade;
-        vColor = color;
-        gl_PointSize = aSize * uPx;
+        // glimmer: three incommensurate beats per star make an irregular flicker,
+        // stronger low in the sky where the light crosses more air
+        float t = uTime + aPhase * 97.0;
+        float wobble = 0.5 * sin(t * (2.1 + 2.7 * aPhase)) + 0.3 * sin(t * (5.3 + 3.1 * fract(aPhase * 7.0))) + 0.2 * sin(t * (9.7 + 4.0 * fract(aPhase * 13.0)));
+        float depth = mix(0.6, 0.3, smoothstep(0.0, 0.6, normalize(position).y));
+        // now and then a star flares for a moment
+        float flare = pow(max(0.0, sin(t * (0.35 + 0.4 * fract(aPhase * 29.0)))), 60.0);
+        vAlpha = aBright * max(0.05, 1.0 + depth * wobble + 1.4 * flare) * uFade;
+        vColor = mix(color, vec3(1.0), 0.5 * flare);
+        gl_PointSize = aSize * (1.0 + 0.6 * flare) * uPx;
       }`,
     fragmentShader: /* glsl */ `
       varying vec3 vColor;
