@@ -178,7 +178,9 @@ void main() {
   float det = du1.x * du2.y - du2.x * du1.y;
   vec3 T = T0 * (dot(dp1 * du2.y - dp2 * du1.y, T0) * det < 0.0 ? -1.0 : 1.0);
 
-  float floorIdx = vFloor.x;
+  // The interpolated index is off by an ulp or two per pixel on some GPUs. The hashes below
+  // amplify that into pixels that disagree about which rooms are lit, so snap it to the integer.
+  float floorIdx = floor(vFloor.x + 0.5);
   float floorH = vFloor.y;
   float u = vUv.x;
   float v = vUv.y;
