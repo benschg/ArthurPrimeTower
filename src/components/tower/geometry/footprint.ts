@@ -163,3 +163,14 @@ export function isConvexVertex(poly: Pt[], i: number): boolean {
   const cross = (c[0] - p[0]) * (q[1] - c[1]) - (c[1] - p[1]) * (q[0] - c[0]);
   return Math.sign(cross) === Math.sign(signedArea(poly));
 }
+
+/** Cumulative perimeter length at each vertex of a polygon (cum[i] = distance from vertex 0 to vertex i, cum[n] = total). */
+export function perimeterOffsets(poly: Pt[]): { cum: number[]; total: number } {
+  const cum = [0];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+  }
+  return { cum, total: cum[poly.length] };
+}

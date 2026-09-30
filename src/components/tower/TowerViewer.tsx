@@ -12,6 +12,7 @@ import { pick } from "@/i18n";
 import { FlagCH, FlagUK, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
 import { floorElevation, FLOORS, polygonArea, stageForFloor, TOWER_HEIGHT } from "./geometry";
+import { blinds, type Blinds } from "./blinds";
 import { DayNightToggle } from "./DayNightToggle";
 import { IconExploded, IconRotate, IconStacked, IconStill, Switch } from "./viewer/Switch";
 import type { CleanState, ViewerState } from "./TowerScene";
@@ -27,6 +28,13 @@ type ToggleKey = keyof Omit<ViewerState, "hovered" | "selected" | "cleaning">;
 
 
 const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
+
+declare global {
+  interface Window {
+    /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) in the console. */
+    primeTower?: { blinds: Blinds };
+  }
+}
 
 export function TowerViewer() {
   const { lang, setLang } = useLang();
@@ -80,6 +88,13 @@ export function TowerViewer() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    window.primeTower = { blinds };
+    return () => {
+      delete window.primeTower;
+    };
   }, []);
 
   const stopCleaning = () => setState((s) => ({ ...s, cleaning: idleClean }));

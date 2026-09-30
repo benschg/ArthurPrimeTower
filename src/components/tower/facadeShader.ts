@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { BLIND_PANES, blinds } from "./blinds";
+import { FLOORS } from "./geometry";
 
 /**
  * Glass facade shader, one ring per floor.
@@ -47,6 +49,8 @@ uniform float uSunIntensity;
 uniform vec3 uF0;
 uniform vec3 uGlassTint;
 uniform vec3 uGround;
+uniform sampler2D uBlinds; // one byte per pane per floor, 0 = raised, 255 = fully lowered
+uniform vec2 uBlindsSize; // (panes, floors)
 
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
@@ -207,10 +211,11 @@ void main() {
   float lit;
   vec3 room = interior(vec3(u, min(v, roomH - 1e-3), 0.0), rd, floorIdx, roomH, lit);
 
-  // blinds on some panes, lowered to a random height
-  float bh = hash12(paneId + 41.0);
-  float blindTo = roomH * (1.0 - (bh - 0.72) * 3.2);
-  float blind = step(0.72, bh) * step(blindTo, v) * (1.0 - step(roomH, v));
+  // blinds: per-pane amount from the controller's texture (row = floor, column = pane)
+  float bpane = mod(floor(u / PANE_W), uBlindsSize.x);
+  float bl = texture2D(uBlinds, (vec2(bpane, floorIdx) + 0.5) / uBlindsSize).r;
+  float blindTo = roomH * (1.0 - bl);
+  float blind = step(0.004, bl) * step(blindTo, v) * (1.0 - step(roomH, v));
   float slatHard = 0.85 + 0.15 * step(0.5, fract(v / 0.08));
   float slat = mix(0.925, slatHard, 1.0 - smoothstep(0.015, 0.06, fwidth(v))); // 8 cm slats alias fast
   vec3 blindCol = vec3(0.5, 0.49, 0.46) * slat * ((1.0 - uNight) * 0.35 + lit * mix(0.25, 0.6, uNight));
@@ -268,6 +273,8 @@ export type FacadeUniforms = {
   uF0: { value: THREE.Color };
   uGlassTint: { value: THREE.Color };
   uGround: { value: THREE.Color };
+  uBlinds: { value: THREE.Texture };
+  uBlindsSize: { value: THREE.Vector2 };
 };
 
 export function createFacadeUniforms(): FacadeUniforms {
@@ -285,6 +292,8 @@ export function createFacadeUniforms(): FacadeUniforms {
     // transmittance of one pane at normal incidence
     uGlassTint: { value: new THREE.Color().setRGB(0.72, 0.9, 0.84) },
     uGround: { value: new THREE.Color("#161d27") },
+    uBlinds: { value: blinds.texture },
+    uBlindsSize: { value: new THREE.Vector2(BLIND_PANES, FLOORS) },
   };
 }
 

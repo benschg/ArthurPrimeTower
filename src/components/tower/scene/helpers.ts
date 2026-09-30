@@ -1,7 +1,7 @@
 import { OPEN_GAP, type ExtractState } from "../Interiors";
 import * as THREE from "three";
 import { floorBands } from "@/data/tower";
-import type { Pt } from "../geometry";
+import { perimeterOffsets, type Pt } from "../geometry";
 
 /** Polygon in (East, North) → THREE.Shape in (x, y) that becomes (x, -z) after rotateX(-π/2). */
 export function shapeFrom(pts: Pt[]): THREE.Shape {
@@ -19,29 +19,56 @@ export function extrudeUp(pts: Pt[], height: number, bevel = false): THREE.Extru
     bevelSize: 0.12,
     bevelThickness: 0.12,
     bevelSegments: 1,
-    UVGenerator: WorldUV,
+    UVGenerator: perimeterUV(pts),
   });
   geo.rotateX(-Math.PI / 2);
   geo.computeVertexNormals();
   return geo;
 }
 
-/** UV generator that maps facade walls in world metres (u along the wall, v = height). */
-export const WorldUV: THREE.ExtrudeGeometryOptions["UVGenerator"] = {
-  generateTopUV(_g, v, a, b, c) {
-    return [new THREE.Vector2(v[a * 3], v[a * 3 + 1]), new THREE.Vector2(v[b * 3], v[b * 3 + 1]), new THREE.Vector2(v[c * 3], v[c * 3 + 1])];
-  },
-  generateSideWallUV(_g, v, a, b, c, d) {
-    const ax = v[a * 3], ay = v[a * 3 + 1], az = v[a * 3 + 2];
-    const bx = v[b * 3], by = v[b * 3 + 1], bz = v[b * 3 + 2];
-    const cz = v[c * 3 + 2];
-    const dz = v[d * 3 + 2];
-    const len = Math.hypot(bx - ax, by - ay);
-    // u runs along the wall segment, seeded by the segment's start position so mullions stay continuous
-    const u0 = (ax + ay) * 0.37;
-    return [new THREE.Vector2(u0, az), new THREE.Vector2(u0 + len, bz), new THREE.Vector2(u0 + len, cz), new THREE.Vector2(u0, dz)];
-  },
-};
+/**
+ * UV generator for a footprint: u is the distance along the perimeter from vertex 0 (metres,
+ * continuous around the corners in either traversal direction), v the height. Pane k of the
+ * facade is then u in [1.5k, 1.5k + 1.5), which is how the blinds texture addresses panes.
+ */
+export function perimeterUV(pts: Pt[]): THREE.ExtrudeGeometryOptions["UVGenerator"] {
+  const { cum, total } = perimeterOffsets(pts);
+  const n = pts.length;
+  const nearest = (x: number, y: number) => {
+    let best = 0;
+    let bd = Infinity;
+    for (let i = 0; i < n; i++) {
+      const d = (pts[i][0] - x) ** 2 + (pts[i][1] - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  return {
+    generateTopUV(_g, v, a, b, c) {
+      return [new THREE.Vector2(v[a * 3], v[a * 3 + 1]), new THREE.Vector2(v[b * 3], v[b * 3 + 1]), new THREE.Vector2(v[c * 3], v[c * 3 + 1])];
+    },
+    generateSideWallUV(_g, v, a, b, c, d) {
+      // a and d sit on the segment's first contour vertex, b and c on the second
+      const i = nearest(v[a * 3], v[a * 3 + 1]);
+      const j = nearest(v[b * 3], v[b * 3 + 1]);
+      const len = Math.hypot(v[b * 3] - v[a * 3], v[b * 3 + 1] - v[a * 3 + 1]);
+      let ua: number;
+      let ub: number;
+      if (j === (i + 1) % n) {
+        ua = cum[i];
+        ub = cum[i] + len;
+      } else {
+        // contour reversed by ExtrudeGeometry: walk the perimeter backwards, wrapping at vertex 0
+        ua = i === 0 ? total : cum[i];
+        ub = ua - len;
+      }
+      return [new THREE.Vector2(ua, v[a * 3 + 2]), new THREE.Vector2(ub, v[b * 3 + 2]), new THREE.Vector2(ub, v[c * 3 + 2]), new THREE.Vector2(ua, v[d * 3 + 2])];
+    },
+  };
+}
 
 /** Deterministic pseudo-random value in [0, 1) for a texture cell. */
 export function hash(i: number, j: number): number {

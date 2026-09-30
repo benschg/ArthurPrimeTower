@@ -6,7 +6,7 @@ import { pick, type Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
 import { PLATE_LIFT, type ExtractState } from "../Interiors";
 import { FLOORS, TOWER_HEIGHT, floorHeight, floorElevation, growPolygon, stages, stageForFloor, DRAWING_ROT_Y, cores, perimeterColumns } from "../geometry";
-import { extrudeUp, bandForFloor, noRaycast, EXPLODE_GAP, liftAbove, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
+import { extrudeUp, bandForFloor, EXPLODE_GAP, liftAbove, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
 import type { SceneProps } from "./types";
 
 export function Structure({ visible }: { visible: boolean }) {
@@ -28,6 +28,9 @@ export function Structure({ visible }: { visible: boolean }) {
     </group>
   );
 }
+
+/** Picking volumes reach this far past the glass so the facade itself is hoverable. */
+const PICK_PAD = 0.25;
 
 export function FloorSlices({
   showTenants,
@@ -78,14 +81,51 @@ export function FloorSlices({
       }),
     [],
   );
+  // Picking volumes: the footprint extruded 1 m (scaled in y per frame), one per floor. The
+  // visible plate is thin and its interior is full of gaps, so the pointer would fall through
+  // it between floors; a solid volume per floor cannot be missed.
+  const pickGeos = useMemo(() => Array.from({ length: FLOORS }, (_, f) => extrudeUp(growPolygon(stageForFloor(f).polygon, PICK_PAD), 1)), []);
   const group = useRef<THREE.Group>(null);
+  const picks = useRef<THREE.Group>(null);
+  const bases = useRef(new Float64Array(FLOORS));
+  const pickOff = useRef(Array.from({ length: FLOORS }, () => false));
+  const hoverF = useRef<number | null>(null);
+
+  // Plates are only pickable while bound to the camera (for the drag); everything else is
+  // picked through the volumes, which switch off for a floor that is out of the stack.
+  const plateRaycast = useMemo(
+    () =>
+      Array.from({ length: FLOORS }, (_, f) =>
+        function (this: THREE.Mesh, rc: THREE.Raycaster, its: THREE.Intersection[]) {
+          const ex = extractRef.current;
+          if (!interactive || !ex || ex.floor !== f || ex.t <= 0.9) return;
+          THREE.Mesh.prototype.raycast.call(this, rc, its);
+        },
+      ),
+    [interactive, extractRef],
+  );
+  const pickRaycast = useMemo(
+    () =>
+      Array.from({ length: FLOORS }, (_, f) =>
+        function (this: THREE.Mesh, rc: THREE.Raycaster, its: THREE.Intersection[]) {
+          if (!interactive || pickOff.current[f]) return;
+          THREE.Mesh.prototype.raycast.call(this, rc, its);
+        },
+      ),
+    [interactive],
+  );
 
   useFrame(() => {
     // the Scene damps the explode and pull-out amounts; plates follow them
     const x = explodeRef.current;
     const ex = extractRef.current;
     const prev = outgoingRef.current;
-    if (!group.current || !x || !ex || !prev) return;
+    if (!group.current || !picks.current || !x || !ex || !prev) return;
+
+    // Bottom of every floor's slot, without the hover bulge.
+    const base = bases.current;
+    for (let f = 0; f < FLOORS; f++) base[f] = floorElevation(f) + f * x.gap + liftAbove(f, ex, prev);
+
     group.current.children.forEach((child, f) => {
       const slot = f === ex.floor ? ex : f === prev.floor ? prev : null;
       if (slot) {
@@ -94,15 +134,55 @@ export function FloorSlices({
         child.scale.set(1, THREE.MathUtils.lerp(x.thin, 0.12, slot.t), 1);
         return;
       }
-      child.position.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap + liftAbove(f, ex, prev) + bulgeLift(f, x), 0);
+      child.position.set(0, base[f] + PLATE_LIFT + bulgeLift(f, x), 0);
       child.quaternion.identity();
       const bs = bulgeScale(f, x);
       child.scale.set(bs, x.thin, bs);
     });
+
+    picks.current.children.forEach((child, f) => {
+      // Each volume runs from the middle of the gap below it to the middle of the gap above,
+      // so neighbours share a face: the pointer can never fall between two floors. The volumes
+      // deliberately ignore the hover bulge, so a bulging floor cannot move its own picking
+      // region out from under the pointer and make the hover jitter.
+      const lo = f === 0 ? base[0] - 1 : (base[f - 1] + floorHeight(f - 1) + base[f]) / 2;
+      const hi = f === FLOORS - 1 ? base[f] + floorHeight(f) + 2 : (base[f] + floorHeight(f) + base[f + 1]) / 2;
+      child.position.set(0, lo, 0);
+      child.scale.set(1, Math.max(hi - lo, 0.05), 1);
+      pickOff.current[f] = (f === ex.floor && ex.t > 0.02) || (f === prev.floor && prev.t > 0.02);
+    });
   });
 
   return (
-    <group ref={group}>
+    <>
+      <group ref={picks}>
+        {pickGeos.map((g, f) => (
+          <mesh
+            key={f}
+            geometry={g}
+            raycast={pickRaycast[f]}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              hoverF.current = f;
+              onHover(f);
+            }}
+            onPointerOut={() => {
+              // the pointer may enter the next volume before this one reports the exit
+              if (hoverF.current !== f) return;
+              hoverF.current = null;
+              onHover(null);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(selected === f ? null : f);
+            }}
+          >
+            {/* invisible but pickable: nothing is written to colour or depth */}
+            <meshBasicMaterial colorWrite={false} depthWrite={false} />
+          </mesh>
+        ))}
+      </group>
+      <group ref={group}>
       {geos.map((g, f) => {
         const band = bandForFloor(f);
         const active = hovered === f || selected === f;
@@ -113,14 +193,12 @@ export function FloorSlices({
             key={f}
             geometry={g}
             position={[0, floorElevation(f) + 0.2, 0]}
-            raycast={interactive ? undefined : noRaycast}
+            raycast={plateRaycast[f]}
             onPointerOver={(e) => {
               e.stopPropagation();
-              onHover(f);
               if (isBound(f)) hoverPlate.current = true;
             }}
             onPointerOut={() => {
-              onHover(null);
               if (isBound(f)) hoverPlate.current = false;
             }}
             onPointerDown={(e) => {
@@ -169,7 +247,8 @@ export function FloorSlices({
           </mesh>
         );
       })}
-    </group>
+      </group>
+    </>
   );
 }
 

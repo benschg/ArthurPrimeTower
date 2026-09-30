@@ -34,6 +34,17 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   ring per floor so the stack can open and explode.
 - **Entrances**: main entrance with canopy and the bank branch on the recessed south-east porch, Clouds entrance on the
   plaza side. `/#entrance` opens the site at street level in front of the main door.
+- **Window blinds** (`src/components/tower/blinds.ts`): every pane of every floor has its own blind, stored in a
+  128 x 36 data texture the facade shader samples. Pane k of a floor is the 1.5 m strip from k x 1.5 m along that
+  floor's perimeter, starting at the west corner. Changes glide toward their target. Scriptable in the browser
+  console as `primeTower.blinds`:
+  `setAll(1)`, `setFloor(24, 1)`, `setFacade(21, 3, 0.6)` (edge index as in `geometry`, 3 = Hardbrücke side),
+  `set(f, pane, amount)`, `map((floor, pane, edge) => amount)`, `setFromSun([east, north])`, `randomize()`;
+  add `.snap()` to skip the glide. `node scripts/probe-blinds.mjs` exercises all of it.
+- **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
+  middle of the gap below to the middle of the gap above), so the pointer never falls between floors in the
+  exploded view. The volumes ignore the hover bulge, so the bulge cannot chase its own movement.
+  `node scripts/probe-hover.mjs` sweeps the stack and reports misses and reversals.
 - **Photos** (`public/photos/`, `src/data/photos.ts`): 17 freely licensed images from Wikimedia Commons with
   attribution, downloaded and resized by `scripts/fetch-photos.mjs`.
 

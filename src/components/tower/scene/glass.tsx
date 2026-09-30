@@ -1,4 +1,5 @@
 import { createFacadeMaterial, cubeUVDefines } from "../facadeShader";
+import { blinds } from "../blinds";
 import * as THREE from "three";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
@@ -72,6 +73,7 @@ export function GlassStages({
   }, [env]);
 
   useFrame((_, dt) => {
+    blinds.update(dt);
     const gap = explodeRef.current?.gap ?? 0;
     const ex = extractRef.current;
     const prev = outgoingRef.current;
@@ -80,8 +82,11 @@ export function GlassStages({
     const m = mat();
     if (!m) return;
     if (!fadeMats.current) {
+      // Built from the factory rather than m.clone(): cloning a material copies its uniforms,
+      // and uEnv holds a PMREM render-target texture, which cloneUniforms cannot copy (it warns
+      // and shares the reference). syncClone below sets uEnv and the rest anyway.
       fadeMats.current = [0, 1].map(() => {
-        const c = m.clone() as FacadeMaterial;
+        const c = createFacadeMaterial(m.uniforms.uEnv.value as THREE.Texture);
         c.depthWrite = false;
         return c;
       });
