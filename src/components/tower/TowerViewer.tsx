@@ -32,6 +32,7 @@ import { CrossingHud } from "./viewer/CrossingHud";
 import { race, useRaceActive, useRaceKeys, type Race } from "./race/store";
 import { RaceCountdown, RaceHud } from "./viewer/RaceHud";
 import { FrogSign } from "./viewer/FrogSign";
+import { AboutInfo } from "./viewer/AboutInfo";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -246,6 +247,7 @@ export function TowerViewer() {
           rime
           <br />
           Tower
+          <AboutInfo lang={lang} />
         </h1>
         {/* the tagline and link step aside while a game owns the view */}
         <p className={"mt-3 text-sm text-muted max-w-xs hidden sm:block transition-opacity duration-500 " + (gameView ? "opacity-0" : "")}>{t.tagline}</p>

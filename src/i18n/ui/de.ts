@@ -6,6 +6,8 @@ export const de: typeof en = {
   metaDescription: "Ein interaktiver 3D-Showcase des Prime Tower in Zürich-West: Fakten, Geschosse, Mieter, Tiefgarage und Fotos.",
   nav: { facts: "Fakten", architecture: "Architektur", plans: "Pläne", tenants: "Mieter", garage: "Garage", site: "Areal", gallery: "Fotos", talk: "Vortrag", sources: "Quellen" },
   langSwitch: "English",
+  notAffiliated: "Ein unabhängiges Projekt, ohne Verbindung zu Swiss Prime Site oder dem Prime Tower.",
+  aboutLabel: "Über diese Seite",
 
   viewer: {
     eyebrow: "Zürich-West · Hardstrasse 201",
