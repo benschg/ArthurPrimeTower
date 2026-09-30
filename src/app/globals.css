@@ -306,3 +306,33 @@ body {
     animation: none;
   }
 }
+
+/* Hardbrücke sprint: each digit of the countdown pops up and fades */
+@keyframes race-count {
+  0% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+}
+.race-count {
+  text-shadow:
+    0 4px 0 #10151b,
+    0 0 40px rgb(0 0 0 / 0.6);
+  animation: race-count 0.9s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .race-count {
+    animation: none;
+  }
+}

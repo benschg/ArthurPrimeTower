@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { bridge, railway, railCrossing } from "../geometry";
 import { crossing } from "../crossing/store";
+import { race } from "../race/store";
 import { BUS, CAR, DECK_TOP, KINDS, LANE_Z, LOOP, MAX_PER_LANE, road, VAN } from "../crossing/road";
 
 const GLASS = "#12171d";
@@ -12,7 +13,7 @@ const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /** A box [length, height, width] centred at `at`, in one vertex colour. Vehicles point along +x. */
-function part(size: [number, number, number], at: [number, number, number], color: string): THREE.BufferGeometry {
+export function part(size: [number, number, number], at: [number, number, number], color: string): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(...size).translate(...at);
   const c = new THREE.Color(color);
   const colors = new Float32Array(g.attributes.position.count * 3);
@@ -21,7 +22,7 @@ function part(size: [number, number, number], at: [number, number, number], colo
 }
 
 /** Head lamps (warm white) at the +x end and tail lamps (red) at the -x end of a unit-length, unit-width vehicle. */
-function lampGeometry(): THREE.BufferGeometry {
+export function lampGeometry(): THREE.BufferGeometry {
   return mergeGeometries(
     [-1, 1].flatMap((s) => [
       part([0.03, 0.16, 0.16], [0.5, 0, s * 0.33], "#fff4d6"),
@@ -156,7 +157,9 @@ export function BridgeTraffic({ night }: { night: boolean }) {
     if (!lampMesh || !poolMesh || !lampMat.current || !poolMat.current || KINDS.some((_, k) => !meshes[k])) return;
     const dt = Math.min(rawDt, 0.1);
     road.step(dt);
-    crossing.frame(dt); // the game on the bridge, if one is on, goes by where the vehicles now are
+    // a game on the bridge, if one is on, goes by where the vehicles now are
+    crossing.frame(dt);
+    race.frame(dt);
 
     const nt = nightAmt(dt);
     lampMat.current.color.setScalar(THREE.MathUtils.lerp(0.6, 1, nt));

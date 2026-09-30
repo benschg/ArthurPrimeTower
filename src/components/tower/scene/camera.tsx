@@ -7,6 +7,10 @@ import type { ControlsLike } from "./helpers";
 import { useFacadeFrame } from "./maintenance";
 import { TYPING_FOCUS_Y, TYPING_VIEW } from "../typing/game";
 import { crossingView } from "./crossing";
+import { raceView } from "./race";
+
+/** The chase camera of the race takes in more than the viewer's long lens. */
+const RACE_FOV = 58;
 
 /**
  * Eases the orbit target and camera distance when a mode changes (garage → look low,
@@ -20,8 +24,8 @@ export function CameraRig({
 }: {
   showGarage: boolean;
   explode: boolean;
-  /** square up to the Hardbruecke facade for a game, or look down on the bridge for the one played there */
-  facing: "none" | "cleaning" | "typing" | "crossing";
+  /** square up to the Hardbruecke facade for a game, or go to the bridge for one of those played there */
+  facing: "none" | "cleaning" | "typing" | "crossing" | "race";
   controlsRef: RefObject<ControlsLike | null>;
 }) {
   const size = useThree((st) => st.size);
@@ -31,6 +35,7 @@ export function CameraRig({
   const goal = useRef(new THREE.Vector3());
   const anim = useRef({ until: 0, mode: "" });
   const dirRef = useRef(new THREE.Vector3());
+  const lens = useRef(0);
 
   useEffect(() => {
     anim.current = { until: performance.now() + 1600, mode };
@@ -55,18 +60,28 @@ export function CameraRig({
     const c = controlsRef.current;
     if (!c) return;
     const camera = st.camera;
-    if (facing === "crossing") {
-      const view = crossingView(portrait);
-      c.target.x = THREE.MathUtils.damp(c.target.x, view.target[0], 3, dt);
-      c.target.y = THREE.MathUtils.damp(c.target.y, view.target[1], 3, dt);
-      c.target.z = THREE.MathUtils.damp(c.target.z, view.target[2], 3, dt);
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, view.camera[0], 3, dt);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, view.camera[1], 3, dt);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, view.camera[2], 3, dt);
+    // the race widens the lens; everything else has the one the viewer started with
+    const cam = camera as THREE.PerspectiveCamera;
+    if (!lens.current) lens.current = cam.fov;
+    const fov = facing === "race" ? RACE_FOV : lens.current;
+    if (Math.abs(cam.fov - fov) > 0.05) {
+      cam.fov = THREE.MathUtils.damp(cam.fov, fov, 4, dt);
+      cam.updateProjectionMatrix();
+    }
+    // a game on the bridge: look down across the deck, or chase the player's car
+    const view = facing === "crossing" ? crossingView(portrait) : facing === "race" ? raceView(portrait) : null;
+    if (view) {
+      const k = facing === "race" ? 8 : 3;
+      c.target.x = THREE.MathUtils.damp(c.target.x, view.target[0], k, dt);
+      c.target.y = THREE.MathUtils.damp(c.target.y, view.target[1], k, dt);
+      c.target.z = THREE.MathUtils.damp(c.target.z, view.target[2], k, dt);
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, view.camera[0], k, dt);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, view.camera[1], k, dt);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, view.camera[2], k, dt);
       c.update();
       return;
     }
-    if (facing !== "none") {
+    if (facing === "cleaning" || facing === "typing") {
       // Square up to a game's surface: the cleaning facade, or the three-faced flank the
       // typing game writes on (far enough back to take in all three faces).
       const typing = facing === "typing";

@@ -7,6 +7,7 @@ import { neighbours, bridge, bridgePiers, stationPlatform, railway } from "../ge
 import { extrudeUp } from "./helpers";
 import { BridgeTraffic, Trains } from "./traffic";
 import { CrossingFrog } from "./crossing";
+import { RaceCars } from "./race";
 
 export function Footprint({ polygon, height, color, floors, name, note }: (typeof neighbours)[number]) {
   const geo = useMemo(() => extrudeUp(polygon, height), [polygon, height]);
@@ -48,14 +49,14 @@ export function Site({
   lang,
   night,
   interactive,
-  onStartCrossing,
+  onPlayBridge,
   onHoverBridge,
 }: {
   lang: Lang;
   night: boolean;
-  /** no game has the scene: a click on the bridge may start the one played there */
+  /** no game has the scene: a click on the bridge may start one of those played there */
   interactive: boolean;
-  onStartCrossing: () => void;
+  onPlayBridge: () => void;
   onHoverBridge: (v: boolean) => void;
 }) {
   const lab = ui[lang].viewer.labels;
@@ -90,7 +91,7 @@ export function Site({
 
       {/* Hardbrücke elevated road. Rotation about Y by -bearing aligns local +x with the compass bearing. */}
       <group position={[bridge.center[0], 0, -bridge.center[1]]} rotation={[0, Math.PI / 2 - bRot, 0]}>
-        {/* The deck: click it to play the crossing game (a drag that ends here is an orbit, not a click) */}
+        {/* The deck: click it to play one of the bridge's games (a drag that ends here is an orbit, not a click) */}
         <mesh
           position={[0, bridge.deckHeight, 0]}
           castShadow
@@ -98,7 +99,7 @@ export function Site({
           onClick={(e) => {
             if (!interactive || e.delta > 4) return;
             e.stopPropagation();
-            onStartCrossing();
+            onPlayBridge();
           }}
           onPointerOver={() => interactive && onHoverBridge(true)}
           onPointerOut={() => onHoverBridge(false)}
@@ -123,6 +124,7 @@ export function Site({
         </Html>
         <BridgeTraffic night={night} />
         <CrossingFrog />
+        <RaceCars />
       </group>
 
       {/* Bahnhof Hardbrücke platform (at ground level beneath the bridge) */}

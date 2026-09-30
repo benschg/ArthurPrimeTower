@@ -1,6 +1,7 @@
 /**
  * The Hardbrücke as a road: three lanes each way and the vehicles on them. Plain numbers, no
- * three.js: the scene draws the vehicles, and the crossing game has to keep clear of them.
+ * three.js: the scene draws the vehicles, the crossing game has to keep clear of them and the
+ * race weaves through them.
  * Everything is in metres in the bridge's own frame: x along the deck from its centre, z across.
  */
 import { bridge } from "../geometry";
@@ -70,6 +71,9 @@ export type Vehicle = {
   leaving: boolean;
 };
 
+/** Something else on the road that the traffic behind has to brake for: the racers of the race game. */
+export type Blocker = { dir: 1 | -1; z: number; p: number; len: number };
+
 export type Lane = {
   z: number;
   dir: 1 | -1;
@@ -99,6 +103,7 @@ function newVehicle(tier: number): Vehicle {
 class Road {
   readonly lanes: Lane[] = ([1, -1] as const).flatMap((dir) => LANE_Z.map((z, tier): Lane => ({ z: dir * z, dir, tier, list: [] })));
   flow: Flow = CALM;
+  blockers: Blocker[] = [];
 
   step(dt: number): void {
     for (const lane of this.lanes) {
@@ -109,11 +114,17 @@ class Road {
       for (let i = 0; i < n; i++) {
         const c = list[i];
         let target = c.want * this.flow.pace;
+        // room to whatever is ahead: the next vehicle of the lane, or a blocker in it
+        let gap = Infinity;
         if (n > 1) {
           const lead = list[(i + 1) % n];
-          const gap = lead.p - lead.len / 2 - (c.p + c.len / 2) + (i === n - 1 ? LOOP : 0);
-          target = Math.min(target, Math.max(0, (gap - MIN_GAP) / this.flow.headway));
+          gap = lead.p - lead.len / 2 - (c.p + c.len / 2) + (i === n - 1 ? LOOP : 0);
         }
+        for (const b of this.blockers) {
+          if (b.dir !== lane.dir || b.p < c.p || Math.abs(b.z - lane.z) > 1.9) continue;
+          gap = Math.min(gap, b.p - b.len / 2 - (c.p + c.len / 2));
+        }
+        if (gap < Infinity) target = Math.min(target, Math.max(0, (gap - MIN_GAP) / this.flow.headway));
         c.v += clamp(target - c.v, -7 * dt, 2.2 * dt);
         c.p += c.v * dt;
         c.shown = clamp(c.shown + (c.leaving ? -dt : dt) / SPROUT, 0, 1);
@@ -177,10 +188,12 @@ class Road {
     const a = list[after];
     c.p = a.p + a.len / 2 + margin + c.len / 2 + rand(0.2, 0.8) * spare;
     c.v = Math.min(c.want * this.flow.pace, list[(after + 1) % n].v);
-    if (c.p >= LOOP) {
-      c.p -= LOOP;
-      list.unshift(c);
-    } else list.splice(after + 1, 0, c);
+    const wrapped = c.p >= LOOP;
+    if (wrapped) c.p -= LOOP;
+    // not on top of a blocker; the next try lands somewhere else in the gap
+    if (this.blockers.some((b) => b.dir === lane.dir && Math.abs(b.z - lane.z) < 1.9 && Math.abs(b.p - c.p) < 14)) return false;
+    if (wrapped) list.unshift(c);
+    else list.splice(after + 1, 0, c);
     return true;
   }
 }

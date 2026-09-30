@@ -76,12 +76,19 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   Hardbrücke, keeping right; each lane is a ring in which vehicles hold their own pace and slow down behind slower
   ones. Lamps glow and headlight pools fade in at night. On the railway an S-Bahn brakes, stops under the bridge at
   Bahnhof Hardbrücke and pulls away again, and a locomotive-hauled train runs through, both keeping left.
-- **Across the Hardbrücke** (`src/components/tower/crossing/`, `scene/crossing.tsx`): click the bridge (or open
-  `/#crossing`). The camera drops to the deck and a frog has to hop across all six lanes to the lit footway and
+- **Across the Hardbrücke** (`src/components/tower/crossing/`, `scene/crossing.tsx`): click the bridge (two times
+  in three this game starts, otherwise the sprint below; `/#crossing` opens it directly). The camera drops to the deck and a frog has to hop across all six lanes to the lit footway and
   back again, as in the arcade; every crossing thickens the traffic (extra vehicles sprout in the gaps) and the
   clock gets shorter. Arrow keys or WASD, a pad on touch screens, three lives, best in localStorage, Esc quits.
   A large animated warning sign (a frog waving a stop sign) stays up throughout: it is a game, nobody is to cross the real road. Scriptable as
   `primeTower.crossing` (`game`, `move(x, y)`).
+- **Hardbrücke sprint** (`src/components/tower/race/`, `scene/race.tsx`): one click on the bridge in three starts
+  a race instead (or open `/#race`). After a 3-2-1 countdown the player's car dashes along the bridge against three
+  rivals, through the traffic of one carriageway, with a chase camera on a wider lens. The car accelerates by
+  itself; left and right change lane, down brakes. Running into a vehicle holds the car behind it until the player
+  moves over; the traffic brakes for the racers (`road.blockers`). Place, time and bumps in the card, best time in
+  localStorage, and the frog's sign says there is no racing on the real road. Scriptable as `primeTower.race`
+  (`game`, `steer(d)`, `brake(on)`).
 - **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
   middle of the gap below to the middle of the gap above), so the pointer never falls between floors in the
   exploded view. The volumes ignore the hover bulge, so the bulge cannot chase its own movement.
@@ -105,6 +112,7 @@ src/components/tower/
     pacman.tsx           the floor-13 game board on the pulled-out plate
     traffic.tsx          vehicles on the bridge, trains on the railway
     crossing.tsx         the frog and camera view of the bridge game
+    race.tsx             cars, finish gantry and chase camera of the sprint
     entrances.tsx        doors and canopy on the ground floor
     site.tsx / garage.tsx neighbours, bridge, railway; two-level garage and peek target
     camera.tsx / blender.tsx  mode transitions; day/night and garage fades
@@ -113,6 +121,7 @@ src/components/tower/
                          drawing frame), site (OSM footprints, garage, parking)
   pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts, sound.ts
   crossing/              bridge game: road.ts (lanes and vehicles), game.ts (rules), store.ts
+  race/                  the sprint along the bridge: game.ts (rules, rivals), store.ts
   interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions
   Interiors.tsx          instanced rendering of the fit-out, lift cables and cars
   facadeShader.ts        GLSL facade material

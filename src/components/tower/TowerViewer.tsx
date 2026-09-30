@@ -28,7 +28,10 @@ import { PAC_FLOOR } from "./pacman/maze";
 import { pacman, usePacmanActive, usePacmanKeys, type Pacman } from "./pacman/store";
 import { PacmanHud } from "./viewer/PacmanHud";
 import { crossing, useCrossingActive, useCrossingKeys, type Crossing } from "./crossing/store";
-import { CrossingHud, CrossingWarning } from "./viewer/CrossingHud";
+import { CrossingHud } from "./viewer/CrossingHud";
+import { race, useRaceActive, useRaceKeys, type Race } from "./race/store";
+import { RaceCountdown, RaceHud } from "./viewer/RaceHud";
+import { FrogSign } from "./viewer/FrogSign";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -43,7 +46,7 @@ const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 declare global {
   interface Window {
     /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) or primeTower.windows.setAll(1) in the console. */
-    primeTower?: { blinds: Blinds; windows: Windows; life: FacadeLife; cannons: typeof confettiCannons; pacman: Pacman; crossing: Crossing; typingChars: () => string; typingState: () => TypingState };
+    primeTower?: { blinds: Blinds; windows: Windows; life: FacadeLife; cannons: typeof confettiCannons; pacman: Pacman; crossing: Crossing; race: Race; typingChars: () => string; typingState: () => TypingState };
   }
 }
 
@@ -74,6 +77,7 @@ export function TowerViewer() {
   );
   const onStartCleaning = useCallback(() => {
     crossing.stop();
+    race.stop();
     setState((s) => ({
       ...s,
       hovered: null,
@@ -112,7 +116,7 @@ export function TowerViewer() {
   const typingGame = useTypingGame(quitTyping);
   const typingState = typingGame.game;
   useEffect(() => {
-    window.primeTower = { blinds, windows, life: facadeLife, cannons: confettiCannons, pacman, crossing, typingChars: () => typingState.chars, typingState: () => typingState };
+    window.primeTower = { blinds, windows, life: facadeLife, cannons: confettiCannons, pacman, crossing, race, typingChars: () => typingState.chars, typingState: () => typingState };
     return () => {
       delete window.primeTower;
     };
@@ -134,28 +138,40 @@ export function TowerViewer() {
     const id = window.setTimeout(() => onSelect(PAC_FLOOR), 1500);
     return () => window.clearTimeout(id);
   }, [onSelect]);
-  // The Hardbrücke game: a click on the bridge starts it (the scene only passes clicks on while
-  // no other game is on); it ends when it is quit or another game takes over.
+  // The games on the Hardbrücke: a click on the bridge starts one (the scene only passes clicks
+  // on while no other game is on), usually the frog's crossing, one time in three the race.
+  // Either ends when it is quit or another game takes over.
   const crossActive = useCrossingActive();
+  const raceActive = useRaceActive();
   const startCrossing = useCallback(() => {
     setState((s) => ({ ...s, hovered: null, selected: null, explode: false, showGarage: false }));
+    race.stop();
     crossing.start();
   }, []);
-  const quitCrossing = useCallback(() => {
+  const startRace = useCallback(() => {
+    setState((s) => ({ ...s, hovered: null, selected: null, explode: false, showGarage: false }));
     crossing.stop();
+    race.start();
   }, []);
-  useCrossingKeys(crossActive, quitCrossing);
-  useEffect(() => quitCrossing, [quitCrossing]);
-  // Deep link: /#crossing starts it once the scene is up.
-  useEffect(() => {
-    if (typeof window === "undefined" || window.location.hash !== "#crossing") return;
-    const id = window.setTimeout(startCrossing, 1500);
-    return () => window.clearTimeout(id);
-  }, [startCrossing]);
-  /** a game has the view: the title block's extras step aside */
-  const gameView = state.typing || pacActive || crossActive;
-  const startTyping = () => {
+  const playBridge = useCallback(() => (Math.random() < 1 / 3 ? startRace() : startCrossing()), [startRace, startCrossing]);
+  const quitBridge = useCallback(() => {
     crossing.stop();
+    race.stop();
+  }, []);
+  useCrossingKeys(crossActive, quitBridge);
+  useRaceKeys(raceActive, quitBridge);
+  useEffect(() => quitBridge, [quitBridge]);
+  // Deep links: /#crossing and /#race start the one or the other once the scene is up.
+  useEffect(() => {
+    const hash = typeof window === "undefined" ? "" : window.location.hash;
+    if (hash !== "#crossing" && hash !== "#race") return;
+    const id = window.setTimeout(hash === "#race" ? startRace : startCrossing, 1500);
+    return () => window.clearTimeout(id);
+  }, [startCrossing, startRace]);
+  /** a game has the view: the title block's extras step aside */
+  const gameView = state.typing || pacActive || crossActive || raceActive;
+  const startTyping = () => {
+    quitBridge();
     setState((s) => ({ ...s, typing: true, hovered: null, selected: null, explode: false, showGarage: false, cleaning: idleClean }));
     typingGame.start();
   };
@@ -185,18 +201,19 @@ export function TowerViewer() {
   const finished = success || (clean.active && clean.secondsLeft <= 0);
 
   return (
-    <div data-game={pacActive ? "pacman" : crossActive ? "crossing" : undefined} className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + ((unitHover || (bridgeHover && !gameView)) && !clean.active ? "cursor-pointer" : "")}>
+    <div data-game={pacActive ? "pacman" : crossActive ? "crossing" : raceActive ? "race" : undefined} className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + ((unitHover || (bridgeHover && !gameView)) && !clean.active ? "cursor-pointer" : "")}>
       <TowerScene
         {...state}
         pacman={pacActive}
         crossing={crossActive}
+        race={raceActive}
         lang={lang}
         onHover={onHover}
         onSelect={onSelect}
         onStartCleaning={onStartCleaning}
         onCleanProgress={onCleanProgress}
         onHoverUnit={setUnitHover}
-        onStartCrossing={startCrossing}
+        onPlayBridge={playBridge}
         onHoverBridge={setBridgeHover}
       />
       {success && <Celebration title={g.success} text={g.timeUsed(Math.round(60 - clean.secondsLeft))} />}
@@ -204,7 +221,9 @@ export function TowerViewer() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-ink/80 to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 left-0 w-[46vw] max-w-md bg-linear-to-r from-ink/70 to-transparent" />
 
-      {crossActive && <CrossingWarning lang={lang} />}
+      {crossActive && <FrogSign title={ui[lang].crossing.warning} text={ui[lang].crossing.warningText} />}
+      {raceActive && <FrogSign compact title={ui[lang].race.warning} text={ui[lang].race.warningText} />}
+      {raceActive && <RaceCountdown lang={lang} />}
 
       {/* Title */}
       <div className="absolute left-4 top-4 sm:left-8 sm:top-8 pointer-events-none max-w-[60vw]">
@@ -256,7 +275,7 @@ export function TowerViewer() {
           onToggle={() => toggle("autoRotate")}
           label={t.toggles.autoRotate[0]}
           hint={t.toggles.autoRotate[1]}
-          disabled={clean.active || state.typing || crossActive}
+          disabled={clean.active || state.typing || crossActive || raceActive}
           left={<IconStill />}
           right={<IconRotate spinning={state.autoRotate} />}
         />
@@ -271,7 +290,7 @@ export function TowerViewer() {
           onToggle={() => toggle("explode")}
           label={t.toggles.explode[0]}
           hint={t.toggles.explode[1]}
-          disabled={clean.active || state.typing || crossActive}
+          disabled={clean.active || state.typing || crossActive || raceActive}
           left={<IconStacked />}
           right={<IconExploded />}
         />
@@ -282,7 +301,9 @@ export function TowerViewer() {
         {pacActive ? (
           <PacmanHud lang={lang} onQuit={quitPacman} />
         ) : crossActive ? (
-          <CrossingHud lang={lang} onQuit={quitCrossing} />
+          <CrossingHud lang={lang} onQuit={quitBridge} />
+        ) : raceActive ? (
+          <RaceHud lang={lang} onQuit={quitBridge} />
         ) : state.typing ? (
           <TypingHud game={typingGame.game} lang={lang} onAgain={typingGame.start} onQuit={typingGame.stop} onKey={typingGame.pressKey} />
         ) : clean.active ? (
@@ -315,7 +336,7 @@ export function TowerViewer() {
             <p className="mt-1 text-sm leading-snug">
               {t.hint} <span className="text-accent">{t.hintTenants}</span> {t.hintRest}
             </p>
-            <p className="mt-2 text-[11px] text-muted">{unitHover ? g.start : bridgeHover ? ui[lang].crossing.tease : t.modelNote}</p>
+            <p className="mt-2 text-[11px] text-muted">{unitHover ? g.start : bridgeHover ? ui[lang].bridgeTease : t.modelNote}</p>
           </>
         ) : (
           <>
@@ -371,7 +392,7 @@ export function TowerViewer() {
       <div
         className={
           "absolute right-4 bottom-4 sm:right-8 sm:bottom-8 hidden lg:flex flex-col items-end gap-1 font-mono text-[10px] text-muted pointer-events-none " +
-          (focus !== null || clean.active || state.typing || crossActive ? "opacity-0" : "")
+          (focus !== null || clean.active || gameView ? "opacity-0" : "")
         }
       >
         <span>▲ {TOWER_HEIGHT.toFixed(0)} m</span>
