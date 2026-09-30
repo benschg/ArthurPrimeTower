@@ -14,6 +14,8 @@ export type ViewerState = {
 };
 
 export type SceneProps = ViewerState & {
+  /** the floor-13 game is on: that floor's plate is the board */
+  pacman: boolean;
   lang: Lang;
   onHover: (floor: number | null) => void;
   onSelect: (floor: number | null) => void;

@@ -15,9 +15,17 @@ import { GaragePeekTarget, Garage } from "./garage";
 import { CameraRig } from "./camera";
 import { Blender } from "./blender";
 import { ConfettiCannons } from "./cannons";
+import { PacmanBoard } from "./pacman";
+import { PAC_FLOOR } from "../pacman/maze";
+import { boardOutline, fitBoard } from "./boardFit";
+
+/** The game floor is held nearly face-on, like a board; upright screens turn it on end. */
+const BOARD_TILT = 1.3;
+/** A pulled-out floor shifts the picture by this fraction of the view's width. */
+const VIEW_SHIFT = 0.17;
 
 export function Scene(props: SceneProps) {
-  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
+  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, pacman, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
   // a game owns the facade, the camera and the pointer
   const busy = cleaning.active || typing;
   const labelFloor = selected ?? hovered;
@@ -41,6 +49,9 @@ export function Scene(props: SceneProps) {
   }, []);
   const [interiorsActive, setInteriorsActive] = useState(false);
   const bind = useRef({ pos: new THREE.Vector3(), quat: new THREE.Quaternion(), q1: new THREE.Quaternion(), q2: new THREE.Quaternion(), rest: new THREE.Vector3(), off: new THREE.Vector3() });
+  // Game board: `posed` marks that the plate has been set up for it (for a view of w x h),
+  // (tx, ty) is where its centre goes on the canvas, `amt` eases it there.
+  const board = useRef({ posed: false, amt: 0, w: 0, h: 0, tx: 0, ty: 0 });
   useFrame((st, dt) => {
     const x = explodeRef.current;
     x.gap = THREE.MathUtils.damp(x.gap, explode ? EXPLODE_GAP : 0, 4, dt);
@@ -83,6 +94,28 @@ export function Scene(props: SceneProps) {
       ex.tilt = PLATE_TILT;
       ex.zoom = 1;
     }
+    // The game starts a moment after its floor is selected: turn the plate into a board once
+    // (and again when the view is resized), centred and sized so the whole floor shows clear
+    // of the HUD. After that the player's drag and wheel work as on any other floor.
+    const upright = st.size.height > st.size.width;
+    const plateDist = upright ? 150 : 112;
+    const fovTan = Math.tan(THREE.MathUtils.degToRad((st.camera as THREE.PerspectiveCamera).fov) / 2);
+    const bd = board.current;
+    if (pacman && ex.floor === PAC_FLOOR && (!bd.posed || bd.w !== st.size.width || bd.h !== st.size.height)) {
+      if (!bd.posed) {
+        ex.tilt = BOARD_TILT;
+        ex.spin = upright ? Math.PI / 2 : 0;
+      }
+      const fit = fitBoard(st.gl.domElement, ex.tilt, PLATE_YAW + ex.spin);
+      ex.zoom = THREE.MathUtils.clamp((fit.ppm * 2 * plateDist * fovTan) / st.size.height, 0.4, 2.6);
+      bd.tx = fit.x;
+      bd.ty = fit.y;
+      bd.w = st.size.width;
+      bd.h = st.size.height;
+      bd.posed = true;
+    }
+    if (!pacman) bd.posed = false;
+    bd.amt = THREE.MathUtils.damp(bd.amt, pacman ? 1 : 0, 6, dt);
     // Current: open the stack above the floor, then pop the plate out; reverse on release.
     ex.open = THREE.MathUtils.damp(ex.open, sel ? 1 : ex.t < 0.3 ? 0 : 1, 3.5, dt);
     ex.t = THREE.MathUtils.damp(ex.t, sel && ex.open > 0.55 ? 1 : 0, 3.5, dt);
@@ -111,10 +144,21 @@ export function Scene(props: SceneProps) {
       // rest: the plate's slot in the (possibly exploded) stack
       b.rest.set(0, floorElevation(f) + PLATE_LIFT + f * x.gap, 0);
       // bound: a spot on the right of the view, tilted toward the viewer, long axis horizontal
-      const dist = size.height > size.width ? 150 : 112;
+      const dist = plateDist;
       const right = size.height > size.width ? 0 : 44;
       const up = size.height > size.width ? -38 : -6;
-      b.off.set(right, up, -dist).multiplyScalar(1 / e.zoom).applyQuaternion(cam.quaternion);
+      b.off.set(right, up, -dist).multiplyScalar(1 / e.zoom);
+      if (f === PAC_FLOOR && bd.amt > 0.001) {
+        // The game board: the centre of its outline goes to its spot on the canvas, however
+        // the plate is turned and whatever the view offset below does to the picture.
+        const ppm = (size.height * e.zoom) / (2 * dist * fovTan);
+        const o = boardOutline(e.tilt, PLATE_YAW + e.spin);
+        const bx = (bd.tx - size.width / 2 + ex.shift * VIEW_SHIFT * size.width) / ppm - o.cx;
+        const by = -(bd.ty - size.height / 2) / ppm - o.cy;
+        b.off.x = THREE.MathUtils.lerp(b.off.x, bx, bd.amt);
+        b.off.y = THREE.MathUtils.lerp(b.off.y, by, bd.amt);
+      }
+      b.off.applyQuaternion(cam.quaternion);
       b.pos.copy(cam.position).add(b.off);
       b.q1.setFromAxisAngle(AX_X, e.tilt);
       b.q2.setFromAxisAngle(AX_Y, PLATE_YAW + e.spin);
@@ -129,7 +173,7 @@ export function Scene(props: SceneProps) {
     pose(prev);
     // shift the picture right so the tower sits left of the pulled-out floor
     const cam2 = cam as THREE.PerspectiveCamera;
-    if (ex.shift > 0.001) cam2.setViewOffset(size.width, size.height, ex.shift * 0.17 * size.width, 0, size.width, size.height);
+    if (ex.shift > 0.001) cam2.setViewOffset(size.width, size.height, ex.shift * VIEW_SHIFT * size.width, 0, size.width, size.height);
     else if (cam2.view?.enabled) cam2.clearViewOffset();
     const want = x.gap > 0.001 || ex.floor >= 0 || prev.floor >= 0 || explode || selected !== null;
     if (want !== interiorsActive) setInteriorsActive(want);
@@ -179,7 +223,8 @@ export function Scene(props: SceneProps) {
           onPlateDrag={onPlateDrag}
           onPlateZoom={onPlateZoom}
         />
-        <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} />
+        <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} hideFloor={pacman ? PAC_FLOOR : -1} />
+        {pacman && <PacmanBoard extractRef={extractRef} lang={lang} />}
         <Entrances />
         <ConfettiCannons active={typing} />
         {labelFloor !== null && !busy && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}

@@ -63,11 +63,14 @@ export function Interiors({
   extractRef,
   outgoingRef,
   active,
+  hideFloor = -1,
 }: {
   explodeRef: RefObject<ExplodeState>;
   extractRef: RefObject<ExtractState>;
   outgoingRef: RefObject<ExtractState>;
   active: boolean;
+  /** a floor whose fit-out is cleared away (its plate is a game board), or -1 */
+  hideFloor?: number;
 }) {
   const data = useMemo(() => buildInteriors(), []);
   // per kind, per floor: [start, end) into the instance list (instances are built floor by floor)
@@ -87,7 +90,7 @@ export function Interiors({
     return r;
   }, [data]);
   const refs = useRef<Partial<Record<Kind, THREE.InstancedMesh>>>({});
-  const applied = useRef({ gap: -1, bulgeKey: -1, open: -1, prevOpen: -1, floor: -2, prevFloor: -2 });
+  const applied = useRef({ gap: -1, bulgeKey: -1, open: -1, prevOpen: -1, floor: -2, prevFloor: -2, hide: -1 });
   const dummy = useRef(new THREE.Object3D());
   const plate = useRef(new THREE.Matrix4());
   const local = useRef(new THREE.Matrix4());
@@ -118,7 +121,8 @@ export function Interiors({
       Math.abs(open - a.open) > 0.0005 ||
       Math.abs(prevOpen - a.prevOpen) > 0.0005 ||
       exFloor !== a.floor ||
-      prevFloor !== a.prevFloor
+      prevFloor !== a.prevFloor ||
+      hideFloor !== a.hide
     ) {
       const d = dummy.current;
       for (const k of KINDS) {
@@ -133,7 +137,9 @@ export function Interiors({
             const bl = xs ? bulgeLift(it.f, xs) : 0;
             d.position.set(it.e * bs, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + liftFor(it.f) + bl + it.y, -it.n * bs);
             d.rotation.set(0, it.rot, 0);
-            d.scale.set(it.sx, it.sy, it.sz);
+            // a hidden floor keeps its slots (the ranges below index into them) at zero size
+            if (it.f === hideFloor) d.scale.set(0, 0, 0);
+            else d.scale.set(it.sx, it.sy, it.sz);
             if (k === "liftCable") {
               const h = stackTop + INTERIOR_HEIGHT;
               d.position.y = h / 2;
@@ -152,6 +158,7 @@ export function Interiors({
       a.prevOpen = prevOpen;
       a.floor = exFloor;
       a.prevFloor = prevFloor;
+      a.hide = hideFloor;
     }
 
     // The pulled-out floor(s) follow their camera-bound transforms every frame. When not
@@ -166,6 +173,7 @@ export function Interiors({
       const list: Inst[] = data[k];
       let cursor = 0;
       for (const e of slots) {
+        if (e.floor === hideFloor) continue;
         plate.current.compose(e.pos, e.quat, ONE);
         const d = dummy.current;
         const [s0, s1] = ranges[k][e.floor];

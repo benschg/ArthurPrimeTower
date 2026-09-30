@@ -21,7 +21,8 @@ export default function TowerScene(props: SceneProps) {
       dpr={dpr}
       camera={{ position: [200, 120, 160], fov: 36, near: 1, far: 2500 }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
-      onPointerMissed={() => props.onSelect(null)}
+      // a stray click beside the board must not end the game; its HUD has the way out
+      onPointerMissed={() => !props.pacman && props.onSelect(null)}
       className="!absolute inset-0"
     >
       <Suspense fallback={null}>

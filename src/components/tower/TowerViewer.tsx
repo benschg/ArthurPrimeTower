@@ -22,6 +22,9 @@ import { confettiCannons } from "./typing/cannons";
 import type { TypingState } from "./typing/game";
 import { useTypingGame } from "./typing/useTypingGame";
 import { TypingHud } from "./viewer/TypingHud";
+import { PAC_FLOOR } from "./pacman/maze";
+import { pacman, usePacmanActive, usePacmanKeys, type Pacman } from "./pacman/store";
+import { PacmanHud } from "./viewer/PacmanHud";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -36,7 +39,7 @@ const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 declare global {
   interface Window {
     /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) in the console. */
-    primeTower?: { blinds: Blinds; cannons: typeof confettiCannons; typingChars: () => string; typingState: () => TypingState };
+    primeTower?: { blinds: Blinds; cannons: typeof confettiCannons; pacman: Pacman; typingChars: () => string; typingState: () => TypingState };
   }
 }
 
@@ -59,7 +62,11 @@ export function TowerViewer() {
   const [unitHover, setUnitHover] = useState(false);
 
   const onHover = useCallback((f: number | null) => setState((s) => (s.hovered === f ? s : { ...s, hovered: f })), []);
-  const onSelect = useCallback((f: number | null) => setState((s) => (s.cleaning.active ? s : { ...s, selected: f })), []);
+  // Floor 13 is the game floor: its plate becomes the board, so the stack closes up behind it.
+  const onSelect = useCallback(
+    (f: number | null) => setState((s) => (s.cleaning.active ? s : { ...s, selected: f, explode: f === PAC_FLOOR ? false : s.explode })),
+    [],
+  );
   const onStartCleaning = useCallback(
     () =>
       setState((s) => ({
@@ -101,11 +108,28 @@ export function TowerViewer() {
   const typingGame = useTypingGame(quitTyping);
   const typingState = typingGame.game;
   useEffect(() => {
-    window.primeTower = { blinds, cannons: confettiCannons, typingChars: () => typingState.chars, typingState: () => typingState };
+    window.primeTower = { blinds, cannons: confettiCannons, pacman, typingChars: () => typingState.chars, typingState: () => typingState };
     return () => {
       delete window.primeTower;
     };
   }, [typingState]);
+
+  // The floor-13 game lives on its pulled-out floor: it starts when the floor comes out and
+  // ends when the floor goes back or another game takes over.
+  const pacActive = usePacmanActive();
+  const pacFloorOut = state.selected === PAC_FLOOR && !state.cleaning.active && !state.typing;
+  useEffect(() => {
+    if (pacFloorOut) pacman.start();
+    else pacman.stop();
+  }, [pacFloorOut]);
+  const quitPacman = useCallback(() => onSelect(null), [onSelect]);
+  usePacmanKeys(pacActive, quitPacman);
+  // Deep link: /#pacman pulls floor 13 out once the scene is up.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#pacman") return;
+    const id = window.setTimeout(() => onSelect(PAC_FLOOR), 1500);
+    return () => window.clearTimeout(id);
+  }, [onSelect]);
   const startTyping = () => {
     setState((s) => ({ ...s, typing: true, hovered: null, selected: null, explode: false, showGarage: false, cleaning: idleClean }));
     typingGame.start();
@@ -139,6 +163,7 @@ export function TowerViewer() {
     <div className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + (unitHover && !clean.active ? "cursor-pointer" : "")}>
       <TowerScene
         {...state}
+        pacman={pacActive}
         lang={lang}
         onHover={onHover}
         onSelect={onSelect}
@@ -153,8 +178,9 @@ export function TowerViewer() {
 
       {/* Title */}
       <div className="absolute left-4 top-4 sm:left-8 sm:top-8 pointer-events-none max-w-[60vw]">
-        <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-accent">{t.eyebrow}</p>
-        <h1 className="mt-2 text-4xl sm:text-6xl font-semibold tracking-tight leading-[0.95]">
+        {/* data-board-avoid: the floor-13 game board is fitted clear of these (scene/boardFit.ts) */}
+        <p data-board-avoid className="font-mono text-[11px] uppercase tracking-[0.3em] text-accent">{t.eyebrow}</p>
+        <h1 data-board-avoid className="mt-2 w-fit text-4xl sm:text-6xl font-semibold tracking-tight leading-[0.95]">
           <button
             type="button"
             onClick={(e) => {
@@ -173,13 +199,13 @@ export function TowerViewer() {
           Tower
         </h1>
         {/* the tagline and link step aside while a game owns the view */}
-        <p className={"mt-3 text-sm text-muted max-w-xs hidden sm:block transition-opacity duration-500 " + (state.typing ? "opacity-0" : "")}>{t.tagline}</p>
+        <p className={"mt-3 text-sm text-muted max-w-xs hidden sm:block transition-opacity duration-500 " + (state.typing || pacActive ? "opacity-0" : "")}>{t.tagline}</p>
         <Link
           href={presentationPath}
-          tabIndex={state.typing ? -1 : undefined}
+          tabIndex={state.typing || pacActive ? -1 : undefined}
           className={
             "mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-ink/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent hover:bg-accent/15 hover:border-accent transition-all duration-500 " +
-            (state.typing ? "pointer-events-none opacity-0" : "pointer-events-auto")
+            (state.typing || pacActive ? "pointer-events-none opacity-0" : "pointer-events-auto")
           }
         >
           {ui[lang].sections.talk.cta} →
@@ -187,7 +213,7 @@ export function TowerViewer() {
       </div>
 
       {/* Controls: one column of slider switches */}
-      <div className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
+      <div data-board-avoid className="z-20 absolute right-4 top-4 sm:right-8 sm:top-8 flex flex-col gap-1.5 items-end">
         <Switch
           on={lang === "de"}
           onToggle={() => setLang(lang === "de" ? "en" : "de")}
@@ -221,9 +247,11 @@ export function TowerViewer() {
         />
       </div>
 
-      {/* Bottom-left card: floor info, or the cleaning HUD */}
-      <div className="z-20 absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
-        {state.typing ? (
+      {/* Bottom-left card: floor info, or a game's HUD */}
+      <div data-board-avoid className="z-20 absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
+        {pacActive ? (
+          <PacmanHud lang={lang} onQuit={quitPacman} />
+        ) : state.typing ? (
           <TypingHud game={typingGame.game} lang={lang} onAgain={typingGame.start} onQuit={typingGame.stop} onKey={typingGame.pressKey} />
         ) : clean.active ? (
           <div className="pointer-events-auto">
@@ -275,7 +303,7 @@ export function TowerViewer() {
                   </button>
                 </>
               ) : (
-                <span className="text-muted">{t.pullOut}</span>
+                <span className="text-muted">{focus === PAC_FLOOR ? ui[lang].pacman.tease : t.pullOut}</span>
               )}
               <FloorPlanLink floor={focus} />
             </div>
