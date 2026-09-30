@@ -10,7 +10,7 @@ export function generateStaticParams() {
 }
 
 export const metadata: Metadata = {
-  title: "Vortrag zum Drucken · Prime Tower Zürich",
+  title: "Vortrag zum Drucken",
   robots: { index: false },
 };
 

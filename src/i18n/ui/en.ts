@@ -1,6 +1,6 @@
 /** English UI strings; the shape of this object types every other language. */
 export const en = {
-  metaTitle: "Prime Tower Zürich",
+  metaTitle: "Prime Tower Zürich (unofficial)",
   metaDescription: "An interactive 3D showcase of the Prime Tower in Zürich-West: facts, floors, tenants, garage and photos.",
   nav: { facts: "Facts", architecture: "Architecture", plans: "Plans", tenants: "Tenants", garage: "Garage", site: "Site", gallery: "Photos", talk: "Talk", sources: "Sources" },
   langSwitch: "Deutsch",
