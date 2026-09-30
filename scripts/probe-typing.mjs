@@ -53,8 +53,11 @@ for (const k of s0.chars) {
   await page.keyboard.press(k);
   await wait(150);
 }
+await wait(250);
+console.log("confetti pieces in the air after the round:", await page.evaluate(() => window.primeTower.cannons.live));
 const s2 = await state();
 console.log("after typing the three:", JSON.stringify(s2), "(new chars:", s2.chars !== s0.chars, ")");
+await wait(1600); // let the volley arc out before the capture
 await shot("typing-round2.png");
 
 // two of round 2's characters, then a capture with cleared slots and a burst

@@ -5,7 +5,7 @@ import { entrances } from "../entrances";
 import { EDGE_SE, edgeOutwardNormal, stages } from "../geometry";
 import type { ControlsLike } from "./helpers";
 import { useFacadeFrame } from "./maintenance";
-import { TYPING_FOCUS_Y } from "../typing/game";
+import { TYPING_FOCUS_Y, TYPING_VIEW } from "../typing/game";
 
 /**
  * Eases the orbit target and camera distance when a mode changes (garage → look low,
@@ -55,12 +55,15 @@ export function CameraRig({
     if (!c) return;
     const camera = st.camera;
     if (facing !== "none") {
-      // Face the Hardbruecke facade square-on: the whole cleaning area, or the glyph rows.
-      const { a, along, out, len, lowY, highY } = facade;
-      const mx = a[0] + (along[0] * len) / 2;
-      const mz = -(a[1] + (along[1] * len) / 2);
-      const my = facing === "typing" ? TYPING_FOCUS_Y : (lowY + highY) / 2;
-      const dist = facing === "typing" ? (portrait ? 150 : 95) : portrait ? 215 : 150;
+      // Square up to a game's surface: the cleaning facade, or the three-faced flank the
+      // typing game writes on (far enough back to take in all three faces).
+      const typing = facing === "typing";
+      const { a, along, len, lowY, highY } = facade;
+      const out = typing ? TYPING_VIEW.out : facade.out;
+      const mx = typing ? TYPING_VIEW.center[0] : a[0] + (along[0] * len) / 2;
+      const mz = typing ? -TYPING_VIEW.center[1] : -(a[1] + (along[1] * len) / 2);
+      const my = typing ? TYPING_FOCUS_Y : (lowY + highY) / 2;
+      const dist = typing ? (portrait ? 250 : 128) : portrait ? 215 : 150;
       goal.current.set(mx + out[0] * dist, my + 6, mz - out[1] * dist);
       c.target.x = THREE.MathUtils.damp(c.target.x, mx, 3, dt);
       c.target.y = THREE.MathUtils.damp(c.target.y, my, 3, dt);

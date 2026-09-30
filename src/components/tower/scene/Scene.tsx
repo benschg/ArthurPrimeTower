@@ -14,6 +14,7 @@ import { Site } from "./site";
 import { GaragePeekTarget, Garage } from "./garage";
 import { CameraRig } from "./camera";
 import { Blender } from "./blender";
+import { ConfettiCannons } from "./cannons";
 
 export function Scene(props: SceneProps) {
   const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
@@ -180,6 +181,7 @@ export function Scene(props: SceneProps) {
         />
         <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} />
         <Entrances />
+        <ConfettiCannons active={typing} />
         {labelFloor !== null && !busy && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 

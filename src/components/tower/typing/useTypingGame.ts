@@ -2,30 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { blinds } from "../blinds";
+import { confettiCannons } from "./cannons";
 import { applyKey, GAME_BLIND_SPEED, GAME_GLOW, GAME_TINT, idleTyping, newGame, paint, readBest, tick, type TypingState } from "./game";
-
-export type BurstSpec = { id: number; n: number; x: number; y: number };
 
 /**
  * Runs the typing game: takes over the blinds while active (restoring them after), listens
- * to the keyboard, runs the round timer, and emits confetti bursts for the HUD to render.
+ * to the keyboard, runs the round timer, and fires the roof confetti cannons on successes.
  */
 export function useTypingGame(onQuit: () => void) {
   const [g, setG] = useState<TypingState>(() => idleTyping());
-  const [bursts, setBursts] = useState<BurstSpec[]>([]);
   const gRef = useRef(g);
   const snapshot = useRef<Float32Array | null>(null);
-  const burstId = useRef(0);
 
   useEffect(() => {
     gRef.current = g;
   }, [g]);
-
-  const burst = useCallback((n: number, x = 50, y = 42) => {
-    const id = ++burstId.current;
-    setBursts((b) => [...b, { id, n, x, y }]);
-    window.setTimeout(() => setBursts((b) => b.filter((q) => q.id !== id)), 1600);
-  }, []);
 
   const start = useCallback(() => {
     if (!snapshot.current) snapshot.current = blinds.snapshot();
@@ -56,29 +47,30 @@ export function useTypingGame(onQuit: () => void) {
   }, [g.active, g.over]);
 
   /** Feed one character (any case); returns false if it was not a playable key. */
-  const pressKey = useCallback(
-    (raw: string): boolean => {
-      const k = raw.toUpperCase();
-      if (!/^[A-Z0-9]$/.test(k)) return false;
-      const cur = gRef.current;
-      if (!cur.active || cur.over) return false;
-      const { next, event } = applyKey(cur, k);
-      if (event === "char") {
-        paint(next.chars, next.typed);
-        burst(12);
-      } else if (event === "round") {
-        paint(next.chars, 0);
-        burst(40);
-      } else if (event === "milestone") {
-        paint(next.chars, 0);
-        burst(110);
-      }
-      gRef.current = next;
-      setG(next);
-      return true;
-    },
-    [burst],
-  );
+  const pressKey = useCallback((raw: string): boolean => {
+    const k = raw.toUpperCase();
+    if (!/^[A-Z0-9]$/.test(k)) return false;
+    const cur = gRef.current;
+    if (!cur.active || cur.over) return false;
+    const { next, event } = applyKey(cur, k);
+    if (event === "char") {
+      // the cannon above the character just typed pops a small puff
+      paint(next.chars, next.typed);
+      confettiCannons.fire(next.typed - 1, 14, 0.85);
+    } else if (event === "round") {
+      // all three typed: every cannon fires
+      paint(next.chars, 0);
+      confettiCannons.fire("all", 42, 1);
+    } else if (event === "milestone") {
+      // every fifth round: a double volley
+      paint(next.chars, 0);
+      confettiCannons.fire("all", 60, 1.1);
+      window.setTimeout(() => confettiCannons.fire("all", 60, 1), 380);
+    }
+    gRef.current = next;
+    setG(next);
+    return true;
+  }, []);
 
   // keyboard (desktop). Handled keys are prevented, so a focused input sees no change event.
   useEffect(() => {
@@ -104,5 +96,5 @@ export function useTypingGame(onQuit: () => void) {
     return () => window.removeEventListener("keydown", onKey);
   }, [g.active, start, stop, pressKey]);
 
-  return { game: g, bursts, start, stop, pressKey };
+  return { game: g, start, stop, pressKey };
 }

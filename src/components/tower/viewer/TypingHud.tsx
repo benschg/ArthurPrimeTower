@@ -5,8 +5,6 @@ import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
 import type { TypingState } from "../typing/game";
 import { SLOTS } from "../typing/game";
-import type { BurstSpec } from "../typing/useTypingGame";
-import { CONFETTI_COLORS } from "./Celebration";
 
 export function TypingHud({
   game: g,
@@ -121,55 +119,5 @@ export function TypingHud({
         </>
       )}
     </div>
-  );
-}
-
-/** Short radial confetti bursts anchored at viewport percentages. */
-export function Bursts({ bursts }: { bursts: BurstSpec[] }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
-      {bursts.map((b) => (
-        <Burst key={b.id} spec={b} />
-      ))}
-    </div>
-  );
-}
-
-function Burst({ spec }: { spec: BurstSpec }) {
-  const pieces = Array.from({ length: spec.n }, (_, i) => {
-    const r = (k: number) => {
-      const v = Math.sin(spec.id * 7.13 + i * 12.9898 + k * 78.233) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    const ang = r(1) * Math.PI * 2;
-    const dist = 50 + r(2) * (spec.n > 60 ? 320 : spec.n > 20 ? 200 : 110);
-    return {
-      dx: Math.cos(ang) * dist,
-      dy: Math.sin(ang) * dist * 0.75 + 40,
-      size: 5 + r(3) * 7,
-      color: CONFETTI_COLORS[Math.floor(r(4) * CONFETTI_COLORS.length)],
-      dur: 0.8 + r(5) * 0.6,
-      round: r(6) > 0.6,
-    };
-  });
-  return (
-    <>
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className={"burst absolute " + (p.round ? "rounded-full" : "rounded-sm")}
-          style={{
-            left: `${spec.x}%`,
-            top: `${spec.y}%`,
-            width: p.size,
-            height: p.round ? p.size : p.size * 1.5,
-            background: p.color,
-            ["--dx" as string]: `${p.dx}px`,
-            ["--dy" as string]: `${p.dy}px`,
-            ["--dur" as string]: `${p.dur}s`,
-          }}
-        />
-      ))}
-    </>
   );
 }

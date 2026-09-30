@@ -1,21 +1,34 @@
 /**
- * "Type the tower": three characters are drawn on the Hardbruecke facade with the window
- * blinds (a pane with its blind down is a dot), the player types them, the next three come.
- * Rounds get shorter and draw from a wider, more confusable character set.
+ * "Type the tower": three characters are drawn with the window blinds (a pane with its blind
+ * down is a dot) on the tower's three-faced west flank, one character per face. The player
+ * types them and the next three come. Rounds get shorter and draw from a wider, more
+ * confusable character set.
  */
-import { blinds } from "../blinds";
-import { EDGE_SE, floorElevation } from "../geometry";
+import { blinds, PANE_W } from "../blinds";
+import { floorElevation, perimeterOffsets, stageForFloor, type Pt } from "../geometry";
 import { GLYPH_H, GLYPH_W, GLYPHS } from "./font5x7";
 
 export const SLOTS = 3;
-const GAP = 1; // panes between glyphs
+/** Facade edge per character, left to right as seen from outside: V3-V4, V2-V3, V1-V2. */
+export const SLOT_EDGES = [2, 1, 0];
+/** Panes per glyph column: double-width dots give the letters natural proportions. */
+const PX = 2;
 /** Glyph rows: floors 32 down to 26. All in the top stage, so their pane columns line up. */
 export const TOP_FLOOR = 32;
 export const BOTTOM_FLOOR = TOP_FLOOR - GLYPH_H + 1;
 /** Camera target height for the game: the middle of the glyph rows. */
 export const TYPING_FOCUS_Y = (floorElevation(BOTTOM_FLOOR) + floorElevation(TOP_FLOOR + 1)) / 2;
-/** The facade's u coordinate runs right to left as seen from outside, so columns are mirrored. */
-const MIRROR = true;
+/** Where the camera looks from: square to the flank's chord (V1 to V4), from outside. */
+export const TYPING_VIEW: { center: Pt; out: Pt } = (() => {
+  const poly = stageForFloor(TOP_FLOOR).polygon;
+  const a = poly[0];
+  const b = poly[3];
+  const center: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  let out: Pt = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+  if (out[0] * center[0] + out[1] * center[1] < 0) out = [-out[0], -out[1]]; // away from the tower axis
+  return { center, out };
+})();
 /** Blind look during the game: warm amber that glows, readable by day and night. */
 export const GAME_TINT: [number, number, number] = [1.0, 0.72, 0.28];
 export const GAME_GLOW = 1.5;
@@ -124,24 +137,28 @@ export function tick(s: TypingState, dt: number): TypingState {
   return { ...s, timeLeft: 0, over: true, best, newBest };
 }
 
-/** Draw the round's characters on the facade; typed slots are blank. */
+/** Draw the round's characters, one per face of the flank; typed slots are blank. */
 export function paint(chars: string, typed: number): void {
   for (let r = 0; r < GLYPH_H; r++) {
     const f = TOP_FLOOR - r;
-    const [a, b] = blinds.facadePanes(f, EDGE_SE);
-    const width = b - a;
-    const total = SLOTS * GLYPH_W + (SLOTS - 1) * GAP;
-    const margin = Math.max(0, Math.floor((width - total) / 2));
-    for (let p = a; p < b; p++) blinds.set(f, p, 0);
+    const { cum } = perimeterOffsets(stageForFloor(f).polygon);
     for (let slot = 0; slot < SLOTS; slot++) {
+      const edge = SLOT_EDGES[slot];
+      // clear the whole face row, then draw within the panes that lie fully on this face
+      const [ca, cb] = blinds.facadePanes(f, edge);
+      for (let p = ca; p < cb; p++) blinds.set(f, p, 0);
       if (slot < typed) continue;
       const rows = GLYPHS[chars[slot]];
       if (!rows) continue;
+      const a = Math.ceil(cum[edge] / PANE_W);
+      const b = Math.floor(cum[edge + 1] / PANE_W);
+      const margin = Math.max(0, Math.floor((b - a - GLYPH_W * PX) / 2));
       for (let c = 0; c < GLYPH_W; c++) {
         if (rows[r][c] !== "1") continue;
-        const col = slot * (GLYPH_W + GAP) + c;
-        const p = MIRROR ? b - 1 - margin - col : a + margin + col;
-        blinds.set(f, p, 1);
+        for (let k = 0; k < PX; k++) {
+          // the perimeter coordinate runs right to left as seen from outside, so columns mirror
+          blinds.set(f, b - 1 - margin - (c * PX + k), 1);
+        }
       }
     }
   }

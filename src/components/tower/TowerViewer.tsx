@@ -18,9 +18,10 @@ import { IconExploded, IconRotate, IconStacked, IconStill, Switch } from "./view
 import type { CleanState, ViewerState } from "./TowerScene";
 import { Celebration } from "./viewer/Celebration";
 import { FloorPlanLink } from "./viewer/FloorPlanLink";
+import { confettiCannons } from "./typing/cannons";
 import type { TypingState } from "./typing/game";
 import { useTypingGame } from "./typing/useTypingGame";
-import { Bursts, TypingHud } from "./viewer/TypingHud";
+import { TypingHud } from "./viewer/TypingHud";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -35,7 +36,7 @@ const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 declare global {
   interface Window {
     /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) in the console. */
-    primeTower?: { blinds: Blinds; typingChars: () => string; typingState: () => TypingState };
+    primeTower?: { blinds: Blinds; cannons: typeof confettiCannons; typingChars: () => string; typingState: () => TypingState };
   }
 }
 
@@ -100,7 +101,7 @@ export function TowerViewer() {
   const typingGame = useTypingGame(quitTyping);
   const typingState = typingGame.game;
   useEffect(() => {
-    window.primeTower = { blinds, typingChars: () => typingState.chars, typingState: () => typingState };
+    window.primeTower = { blinds, cannons: confettiCannons, typingChars: () => typingState.chars, typingState: () => typingState };
     return () => {
       delete window.primeTower;
     };
@@ -145,7 +146,6 @@ export function TowerViewer() {
         onCleanProgress={onCleanProgress}
         onHoverUnit={setUnitHover}
       />
-      <Bursts bursts={typingGame.bursts} />
       {success && <Celebration title={g.success} text={g.timeUsed(Math.round(60 - clean.secondsLeft))} />}
       {/* Legibility gradients over the HDRI sky */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-ink/80 to-transparent" />
@@ -172,10 +172,15 @@ export function TowerViewer() {
           <br />
           Tower
         </h1>
-        <p className="mt-3 text-sm text-muted max-w-xs hidden sm:block">{t.tagline}</p>
+        {/* the tagline and link step aside while a game owns the view */}
+        <p className={"mt-3 text-sm text-muted max-w-xs hidden sm:block transition-opacity duration-500 " + (state.typing ? "opacity-0" : "")}>{t.tagline}</p>
         <Link
           href={presentationPath}
-          className="pointer-events-auto mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-ink/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent hover:bg-accent/15 hover:border-accent transition-colors"
+          tabIndex={state.typing ? -1 : undefined}
+          className={
+            "mt-4 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-ink/60 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-accent hover:bg-accent/15 hover:border-accent transition-all duration-500 " +
+            (state.typing ? "pointer-events-none opacity-0" : "pointer-events-auto")
+          }
         >
           {ui[lang].sections.talk.cta} →
         </Link>
