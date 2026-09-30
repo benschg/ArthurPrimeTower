@@ -16,7 +16,8 @@ export default function TowerScene(props: SceneProps) {
   );
   return (
     <Canvas
-      shadows
+      // PCF: three removed PCFSoftShadowMap in r186, which the bare `shadows` flag still asks for.
+      shadows="percentage"
       dpr={dpr}
       camera={{ position: [200, 120, 160], fov: 36, near: 1, far: 2500 }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
