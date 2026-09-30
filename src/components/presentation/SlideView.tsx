@@ -30,12 +30,17 @@ function isPortrait(file: string) {
   return !!p && (p.height ?? 0) > (p.width ?? 0);
 }
 
-function Photo({ file, width, priority, sizes = "60vw", className = "" }: { file: string; width?: number; priority?: boolean; sizes?: string; className?: string }) {
+/** The canvas is never wider than the viewport, so a box `px` wide on it takes at most this share of the viewport's width. */
+function canvasVw(px: number) {
+  return `${Math.ceil((px / CANVAS_W) * 100)}vw`;
+}
+
+function Photo({ file, width, preload, sizes = width ? canvasVw(width) : "100vw", className = "" }: { file: string; width?: number; preload?: boolean; sizes?: string; className?: string }) {
   const p = photoByFile.get(file);
   const alt = p?.titleDe ?? p?.title ?? "";
   return (
     <div className={`relative shrink-0 overflow-hidden rounded-2xl bg-ink-3 ${className}`} style={width ? { width } : undefined}>
-      <Image src={`/photos/${file}`} alt={alt} fill sizes={sizes} priority={priority} className="object-cover" />
+      <Image src={`/photos/${file}`} alt={alt} fill sizes={sizes} preload={preload} className="object-cover" />
     </div>
   );
 }
@@ -111,7 +116,7 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
   if (slide.kind === "hero") {
     return (
       <section className="absolute inset-0 bg-ink text-paper">
-        <Image src={`/photos/${slide.photo}`} alt="" fill sizes="100vw" priority={active} className="object-cover" />
+        <Image src={`/photos/hero/${slide.photo}`} alt="" fill sizes="100vw" preload={active} className="object-cover" />
         <div className="absolute inset-0 bg-linear-to-b from-ink/10 via-ink/55 to-ink/95" />
         <div className="absolute inset-x-32 bottom-32 flex flex-col gap-6">
           <Eyebrow text={t(slide.eyebrow)} />
@@ -146,7 +151,7 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
         <Title text={t(slide.title)} />
         <div className="flex gap-8 flex-1 min-h-0">
           {slide.photos.map((f) => (
-            <Photo key={f} file={f} width={w} priority={active} />
+            <Photo key={f} file={f} width={w} preload={active} />
           ))}
           <div className="flex-1 min-w-0 flex flex-col gap-6 justify-center">
             {slide.intro && <p className="text-[28px] leading-[1.4] text-muted">{t(slide.intro)}</p>}
@@ -190,7 +195,7 @@ export function SlideView({ slide, index, lang, active }: { slide: Slide; index:
       <div className="flex gap-8 flex-1 min-h-0">
         {slide.photos.map((p) => (
           <div key={p.file} className="flex-1 flex flex-col gap-3 min-h-0">
-            <Photo file={p.file} priority={active} sizes="25vw" className="flex-1" />
+            <Photo file={p.file} preload={active} sizes={`${Math.ceil(100 / slide.photos.length)}vw`} className="flex-1" />
             <p className="text-[24px] text-muted">{t(p.caption)}</p>
           </div>
         ))}

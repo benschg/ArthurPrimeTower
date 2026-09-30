@@ -13,6 +13,7 @@ export type Slide =
       eyebrow: L;
       title: L;
       subtitle: L;
+      /** A file under /public/photos. The slide shows its 16:9 crop from /public/photos/hero: node scripts/crop-heroes.mjs */
       photo: string;
       /** A QR code (SVG under /public) shown bottom right, with the address it encodes. */
       qr?: { file: string; href: string; label: string; hint: L };
@@ -41,6 +42,7 @@ export type Slide =
       /**
        * `photo` is a sky-free cutout under /public/photos/towers, cropped from the roof to
        * `groundMetres` below the tower's foot, so all towers share one metres-to-pixels scale.
+       * The files are 4.2 px per metre, twice the size the slide draws them at.
        */
       bars: { metres: number; label: string; note: L; photo: { file: string; author: string; license: string } }[];
       groundMetres: number;
