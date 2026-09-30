@@ -7,6 +7,7 @@ import { floorElevation } from "../geometry";
 import { EXPLODE_GAP, AX_X, AX_Y, PLATE_YAW, type ControlsLike, type ExplodeState } from "./helpers";
 import type { SceneProps, UnitProps } from "./types";
 import { useHdri } from "./hdri";
+import { Sky } from "./nightSky";
 import { GlassStages } from "./glass";
 import { Entrances } from "./entrances";
 import { Structure, FloorSlices, FloorLabel } from "./floors";
@@ -204,7 +205,8 @@ export function Scene(props: SceneProps) {
       />
       <directionalLight name="fill" position={[160, 90, -140]} intensity={0.6} color="#8fc9ff" />
 
-      <Environment map={env} background />
+      <Environment map={env} />
+      <Sky night={skyNight} hdri={env} />
       <Blender night={night} garageOpen={garageOpen} onSkyNight={setSkyNight} onGarageMounted={setGarageMounted} />
 
       <group>

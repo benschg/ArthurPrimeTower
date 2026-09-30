@@ -49,6 +49,7 @@ export function Blender({
     if (Math.abs(st.garage - (garageOpen ? 1 : 0)) < 0.004) st.garage = garageOpen ? 1 : 0;
     const nt = st.night;
     const gt = st.garage;
+    scene.userData.nightBlend = nt;
 
     // lights and fog
     if (refs.ambient) refs.ambient.intensity = THREE.MathUtils.lerp(0.5, 0.22, nt);
@@ -59,16 +60,17 @@ export function Blender({
     if (refs.fill) refs.fill.intensity = THREE.MathUtils.lerp(0.6, 0.2, nt);
     if (refs.fog) refs.fog.color.copy(DAY_FOG).lerp(NIGHT_FOG, nt);
 
-    // sky: swap the HDRI at the midpoint, dipping through dark to hide the cut
+    // sky: swap the HDRI at the midpoint, dipping through dark to hide the cut.
+    // The night backdrop is the starry dome (see Sky), authored at its final brightness.
     const skyNight = nt >= 0.5;
     if (skyNight !== st.skyNight) {
       st.skyNight = skyNight;
       onSkyNight(skyNight);
     }
     const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2);
-    scene.backgroundIntensity = (skyNight ? 0.22 : 0.55) * (1 - dip * 0.9);
+    scene.backgroundIntensity = (skyNight ? 1 : 0.55) * (1 - dip * 0.9);
     scene.environmentIntensity = (skyNight ? 0.5 : 0.8) * (1 - dip * 0.6);
-    scene.backgroundBlurriness = skyNight ? 0.03 : 0.02;
+    scene.backgroundBlurriness = skyNight ? 0 : 0.02;
 
     // ground and garage
     const ground = refs.ground;
