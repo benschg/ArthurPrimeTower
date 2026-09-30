@@ -1,7 +1,13 @@
-import { l, type L } from "@/i18n";
+import { l, type L, type Lang } from "@/i18n";
 
 /** Route of the school-talk slide deck (src/app/vortrag). */
 export const presentationPath = "/vortrag";
+
+/**
+ * Offline copies of the deck, per language: `${base}.pdf` and `${base}.html` under /public.
+ * Written by scripts/export-talk.mjs (which uses the same names); rerun it after editing the slides.
+ */
+export const talkDownloads: Record<Lang, string> = { de: "/downloads/prime-tower-vortrag", en: "/downloads/prime-tower-talk" };
 
 /** One row of a content slide: a heading (a number, a year or a title) and an optional sentence. */
 export type SlideItem = { head: L | string; text?: L; big?: boolean };

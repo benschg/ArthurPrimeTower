@@ -141,6 +141,7 @@ npm run build && npm start
 ```bash
 node scripts/fetch-photos.mjs                    # refresh photos + metadata (polite to Commons, retries on 429)
 node scripts/crop-heroes.mjs                     # 16:9 crops for the talk's hero slides, after changing a hero photo
+node scripts/export-talk.mjs http://localhost:3000  # the talk as PDF + offline HTML in public/downloads, after editing slides
 node scripts/screenshot.mjs http://localhost:3000 screenshots        # headless Chrome smoke test of every viewer mode
 node scripts/screenshot-game.mjs http://localhost:3000 screenshots   # language default/persistence and the cleaning game
 node scripts/screenshot-roof.mjs http://localhost:3000 screenshots   # roof close-ups by day and night

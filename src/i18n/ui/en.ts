@@ -123,6 +123,8 @@ export const en = {
       next: "Next slide",
       notes: "Notes",
       fullscreen: "Fullscreen",
+      pdfTitle: "Download as PDF, one slide per page",
+      htmlTitle: "Download as a single HTML file that runs offline in any browser, with speaker notes",
     },
     sources: {
       eyebrow: "Sources",

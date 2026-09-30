@@ -125,6 +125,8 @@ export const de: typeof en = {
       next: "Nächste Folie",
       notes: "Notizen",
       fullscreen: "Vollbild",
+      pdfTitle: "Als PDF herunterladen, eine Folie pro Seite",
+      htmlTitle: "Als einzelne HTML-Datei herunterladen, läuft offline in jedem Browser, mit Sprechernotizen",
     },
     sources: {
       eyebrow: "Quellen",

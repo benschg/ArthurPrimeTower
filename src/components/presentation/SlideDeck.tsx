@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { slides } from "@/data/presentation";
+import { slides, talkDownloads } from "@/data/presentation";
 import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
@@ -154,6 +154,12 @@ export function SlideDeck() {
           <button type="button" className={btn} onClick={() => step(1)} disabled={index === slides.length - 1} aria-label={t.next}>
             →
           </button>
+          <a href={`${talkDownloads[lang]}.pdf`} download className={`${btn} hidden sm:block`} title={t.pdfTitle}>
+            PDF
+          </a>
+          <a href={`${talkDownloads[lang]}.html`} download className={`${btn} hidden sm:block`} title={t.htmlTitle}>
+            HTML
+          </a>
           <button type="button" className={`${btn} hidden sm:block ${notes ? "text-accent border-accent" : ""}`} onClick={() => setNotes((v) => !v)}>
             {t.notes}
           </button>
