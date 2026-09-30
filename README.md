@@ -45,9 +45,20 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   tower's three-faced west flank, where three characters are drawn with the blinds as a 5 x 7 dot matrix, one per
   face, with double-width dots (floors 26 to 32, amber glow so they read by day and night). Type them and the next three glide in. Rounds shorten from 10 s toward 3.5 s
   and the character set grows from easy capitals to all letters, then digits, then look-alikes. A wrong key costs a
-  second and the streak; three small cannons sit on the roof, one above each face: a typed character makes its cannon pop a puff of confetti, a finished round fires all three, every fifth round a double volley, and the pieces arc out and float down past the letters. Score,
+  second and the streak; three small cannons sit on the roof, one above each face: a typed character makes its cannon pop a puff of confetti, a finished round fires all three, every fifth round a double volley, and the pieces arc out and float down past the letters. When the clock runs out the
+  facade shows the score in the same dot matrix (a new best gets a volley). Score,
   streak and best (localStorage) live in the bottom-left card; Esc quits and the blinds return to how they were.
   Phones get the soft keyboard through a hidden input. `node scripts/probe-typing.mjs` plays a game headlessly.
+- **Ghosts on 13** (`src/components/tower/pacman/`, `scene/pacman.tsx`): click floor 13 (or open `/#pacman`). The
+  floor pulls out to the front like any other, but its plate arrives as a Pac-Man board: a maze carved into the
+  floor's real plan on a 1.9 m grid in the letting-plan frame, bounded by the facade and the three cores, with the
+  lanes closed into a ring around the cores (157 cells, no dead ends, seeded so it is the same every visit). Four
+  ghosts come up through the lift doors (both banks and the fire lift), float across the core to the lanes and hunt,
+  each in its own way; eat every dot, and a big one at each end of the floor turns the ghosts blue and edible.
+  Arrow keys or WASD steer by screen direction, so they stay right however the plate is dragged around; touch
+  screens get a pad, and upright screens turn the board on end. Three lives, faster ghosts each level, best score in
+  localStorage; Esc or "Quit" puts the floor back. Scriptable as `primeTower.pacman` (`game`, `steer(x, y)`,
+  `text()` prints the board). `node scripts/probe-pacman.mjs` plays it headlessly.
 - **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
   middle of the gap below to the middle of the gap above), so the pointer never falls between floors in the
   exploded view. The volumes ignore the hover bulge, so the bulge cannot chase its own movement.
@@ -68,12 +79,14 @@ src/components/tower/
     floors.tsx           floor plates (hover/click/pull-out), structure, labels
     roof.tsx             parapet, plant room, mast, aviation lights
     maintenance.tsx      cradle, dirt layer and the window-cleaning game
+    pacman.tsx           the floor-13 game board on the pulled-out plate
     entrances.tsx        doors and canopy on the ground floor
     site.tsx / garage.tsx neighbours, bridge, railway; two-level garage and peek target
     camera.tsx / blender.tsx  mode transitions; day/night and garage fades
     hdri.ts / textures.ts / helpers.ts / types.ts
   geometry/              measured geometry: footprint & stages, structure (cores, columns,
                          drawing frame), site (OSM footprints, garage, parking)
+  pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts
   interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions
   Interiors.tsx          instanced rendering of the fit-out, lift cables and cars
   facadeShader.ts        GLSL facade material

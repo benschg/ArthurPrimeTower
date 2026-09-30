@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { blinds } from "../blinds";
 import { confettiCannons } from "./cannons";
-import { applyKey, GAME_BLIND_SPEED, GAME_GLOW, GAME_TINT, idleTyping, newGame, paint, readBest, tick, type TypingState } from "./game";
+import { applyKey, GAME_BLIND_SPEED, GAME_GLOW, GAME_TINT, idleTyping, newGame, paint, paintScore, readBest, tick, type TypingState } from "./game";
 
 /**
  * Runs the typing game: takes over the blinds while active (restoring them after), listens
@@ -45,6 +45,13 @@ export function useTypingGame(onQuit: () => void) {
     const id = window.setInterval(() => setG((s) => tick(s, 0.1)), 100);
     return () => window.clearInterval(id);
   }, [g.active, g.over]);
+
+  // time is up: the facade shows the score; a new best gets a volley
+  useEffect(() => {
+    if (!g.active || !g.over) return;
+    paintScore(g.score);
+    if (g.newBest && g.score > 0) confettiCannons.fire("all", 50, 1.05);
+  }, [g.active, g.over, g.score, g.newBest]);
 
   /** Feed one character (any case); returns false if it was not a playable key. */
   const pressKey = useCallback((raw: string): boolean => {

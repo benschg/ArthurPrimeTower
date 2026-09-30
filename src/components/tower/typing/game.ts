@@ -137,8 +137,12 @@ export function tick(s: TypingState, dt: number): TypingState {
   return { ...s, timeLeft: 0, over: true, best, newBest };
 }
 
-/** Draw the round's characters, one per face of the flank; typed slots are blank. */
-export function paint(chars: string, typed: number): void {
+/**
+ * Draw text on the flank: `perFace[slot]` is the string for that face (empty = blank face),
+ * centred, with glyph dots `px` panes wide. Unknown characters (such as a space) leave a gap.
+ */
+function paintFaces(perFace: string[], px: number): void {
+  const gap = 1; // panes between glyphs on the same face
   for (let r = 0; r < GLYPH_H; r++) {
     const f = TOP_FLOOR - r;
     const { cum } = perimeterOffsets(stageForFloor(f).polygon);
@@ -147,19 +151,46 @@ export function paint(chars: string, typed: number): void {
       // clear the whole face row, then draw within the panes that lie fully on this face
       const [ca, cb] = blinds.facadePanes(f, edge);
       for (let p = ca; p < cb; p++) blinds.set(f, p, 0);
-      if (slot < typed) continue;
-      const rows = GLYPHS[chars[slot]];
-      if (!rows) continue;
+      const text = perFace[slot] ?? "";
+      if (!text) continue;
       const a = Math.ceil(cum[edge] / PANE_W);
       const b = Math.floor(cum[edge + 1] / PANE_W);
-      const margin = Math.max(0, Math.floor((b - a - GLYPH_W * PX) / 2));
-      for (let c = 0; c < GLYPH_W; c++) {
-        if (rows[r][c] !== "1") continue;
-        for (let k = 0; k < PX; k++) {
-          // the perimeter coordinate runs right to left as seen from outside, so columns mirror
-          blinds.set(f, b - 1 - margin - (c * PX + k), 1);
+      const width = text.length * GLYPH_W * px + (text.length - 1) * gap;
+      const margin = Math.max(0, Math.floor((b - a - width) / 2));
+      for (let ci = 0; ci < text.length; ci++) {
+        const rows = GLYPHS[text[ci]];
+        if (!rows) continue;
+        for (let c = 0; c < GLYPH_W; c++) {
+          if (rows[r][c] !== "1") continue;
+          for (let k = 0; k < px; k++) {
+            // the perimeter coordinate runs right to left as seen from outside, so columns mirror
+            blinds.set(f, b - 1 - margin - (ci * (GLYPH_W * px + gap) + c * px + k), 1);
+          }
         }
       }
     }
   }
+}
+
+/** Draw the round's characters, one per face of the flank; typed slots are blank. */
+export function paint(chars: string, typed: number): void {
+  paintFaces(
+    Array.from({ length: SLOTS }, (_, i) => (i < typed ? "" : (chars[i] ?? ""))),
+    PX,
+  );
+}
+
+/**
+ * Show the final score on the flank, right-aligned: up to three digits at full size, one per
+ * face; four to six digits at half width, two per face.
+ */
+export function paintScore(score: number): void {
+  const digits = String(Math.max(0, Math.round(score)));
+  if (digits.length <= SLOTS) {
+    const padded = digits.padStart(SLOTS, " ");
+    paintFaces(Array.from({ length: SLOTS }, (_, i) => padded[i].trim()), PX);
+    return;
+  }
+  const padded = digits.slice(-SLOTS * 2).padStart(SLOTS * 2, " ");
+  paintFaces(Array.from({ length: SLOTS }, (_, i) => padded.slice(i * 2, i * 2 + 2).replace(/^ +$/, "")), 1);
 }
