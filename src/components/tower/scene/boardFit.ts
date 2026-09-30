@@ -17,6 +17,8 @@ const BOARD_TOP = 1.7;
 const MARGIN = 14;
 /** The outline is measured flat-on; perspective makes the near edge a little larger. */
 const PERSPECTIVE_SLACK = 0.95;
+/** The board leaves the centre of the view only if that makes it this much larger. */
+const SLIDE_GAIN = 1.35;
 
 let cache: { tilt: number; yaw: number; pts: [number, number][]; cx: number; cy: number } | null = null;
 
@@ -50,7 +52,8 @@ export function boardOutline(tilt: number, yaw: number) {
 /**
  * Where the board's centre goes on the canvas (CSS pixels) and how large it can be drawn
  * (pixels per metre). On a wide view the board centres on the screen and the HUD pieces in
- * the corners are obstacles its outline must stay out of. A piece spanning most of the
+ * the corners are obstacles its outline must stay out of; if they pin it small there, it
+ * slides a little way off centre. A piece spanning most of the
  * width, and every piece on an upright view, instead shortens the free area from the top
  * or bottom, and the board centres in what is left.
  */
@@ -68,10 +71,8 @@ export function fitBoard(canvas: HTMLElement, tilt: number, yaw: number): { x: n
       else free.bottom = Math.min(free.bottom, rect.top);
     } else obstacles.push(rect);
   }
-  const x = (free.left + free.right) / 2;
-  const y = (free.top + free.bottom) / 2;
   const { pts, cx, cy } = boardOutline(tilt, yaw);
-  const fits = (ppm: number) =>
+  const fits = (x: number, y: number, ppm: number) =>
     pts.every(([px, py]) => {
       const sx = x + (px - cx) * ppm;
       const sy = y - (py - cy) * ppm;
@@ -80,12 +81,30 @@ export function fitBoard(canvas: HTMLElement, tilt: number, yaw: number): { x: n
     });
   // Growing the board about its centre only ever pushes the outline toward the edges and
   // the corner pieces, so the largest size that fits can be bisected.
-  let lo = 0;
-  let hi = Math.max(box.width, box.height) / 20;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) lo = mid;
-    else hi = mid;
+  const largest = (x: number, y: number) => {
+    let lo = 0;
+    let hi = Math.max(box.width, box.height) / 20;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(x, y, mid)) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const x = (free.left + free.right) / 2;
+  const y = (free.top + free.bottom) / 2;
+  let best = { x, y, ppm: largest(x, y) };
+  // Dead centre is where the board belongs. Only where a corner piece pins it small there
+  // (a narrow window, a tall card) may it slide aside a little, and only for a real gain.
+  let aside = best;
+  for (const dx of [-0.12, -0.08, -0.04, 0, 0.04, 0.08, 0.12]) {
+    for (const dy of [-0.05, 0, 0.05]) {
+      const ax = x + dx * (free.right - free.left);
+      const ay = y + dy * (free.bottom - free.top);
+      const ppm = largest(ax, ay);
+      if (ppm > aside.ppm) aside = { x: ax, y: ay, ppm };
+    }
   }
-  return { x, y, ppm: lo * PERSPECTIVE_SLACK };
+  if (aside.ppm > best.ppm * SLIDE_GAIN) best = aside;
+  return { x: best.x, y: best.y, ppm: best.ppm * PERSPECTIVE_SLACK };
 }

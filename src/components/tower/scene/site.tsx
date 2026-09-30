@@ -31,7 +31,7 @@ export function Footprint({ polygon, height, color, floors, name, note }: (typeo
         <lineBasicMaterial color="#0b0f14" transparent opacity={0.5} />
       </lineSegments>
       {name && (
-        <Html zIndexRange={[5, 0]} position={[cx, height + 4, -cy]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }}>
+        <Html zIndexRange={[5, 0]} position={[cx, height + 4, -cy]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
           <div className="text-center whitespace-nowrap">
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/80">{name}</div>
             {note && <div className="text-[9px] text-muted">{note}</div>}
@@ -91,7 +91,7 @@ export function Site({ lang }: { lang: Lang }) {
             <meshStandardMaterial color="#39434f" />
           </mesh>
         ))}
-        <Html zIndexRange={[5, 0]} position={[110, bridge.deckHeight + 6, 0]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }}>
+        <Html zIndexRange={[5, 0]} position={[110, bridge.deckHeight + 6, 0]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.hardbruecke}</div>
         </Html>
       </group>
@@ -100,7 +100,7 @@ export function Site({ lang }: { lang: Lang }) {
       <mesh geometry={station} position={[0, 0.05, 0]} receiveShadow>
         <meshStandardMaterial color="#5b6774" roughness={0.9} />
       </mesh>
-      <Html zIndexRange={[5, 0]} position={[38, 6, 45]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }}>
+      <Html zIndexRange={[5, 0]} position={[38, 6, 45]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
         <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.station}</div>
       </Html>
 

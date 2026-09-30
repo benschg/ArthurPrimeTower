@@ -160,7 +160,7 @@ export function TowerViewer() {
   const finished = success || (clean.active && clean.secondsLeft <= 0);
 
   return (
-    <div className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + (unitHover && !clean.active ? "cursor-pointer" : "")}>
+    <div data-game={pacActive ? "pacman" : undefined} className={"relative w-full h-[100svh] min-h-[560px] overflow-hidden bg-ink " + (unitHover && !clean.active ? "cursor-pointer" : "")}>
       <TowerScene
         {...state}
         pacman={pacActive}
@@ -348,7 +348,7 @@ export function TowerViewer() {
         ))}
       </div>
 
-      <a href="#facts" className="absolute left-1/2 -translate-x-1/2 bottom-4 sm:bottom-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted hover:text-accent hidden sm:block">
+      <a href="#facts" data-board-avoid className="absolute left-1/2 -translate-x-1/2 bottom-4 sm:bottom-8 font-mono text-[10px] uppercase tracking-[0.3em] text-muted hover:text-accent hidden sm:block">
         {t.scroll}
       </a>
     </div>

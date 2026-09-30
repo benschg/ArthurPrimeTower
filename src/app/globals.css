@@ -193,3 +193,11 @@ body {
     animation: none;
   }
 }
+
+/* Floor-13 game: the board takes the middle of the view, where the site's labels would sit on it */
+.site-label {
+  transition: opacity 0.4s ease;
+}
+[data-game="pacman"] .site-label {
+  opacity: 0;
+}

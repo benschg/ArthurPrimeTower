@@ -56,7 +56,9 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   ghosts come up through the lift doors (both banks and the fire lift), float across the core to the lanes and hunt,
   each in its own way; eat every dot, and a big one at each end of the floor turns the ghosts blue and edible.
   Arrow keys or WASD steer by screen direction, so they stay right however the plate is dragged around; touch
-  screens get a pad, and upright screens turn the board on end. Three lives, faster ghosts each level, best score in
+  screens get a pad, and upright screens turn the board on end. The board is centred in the view and sized so the
+  whole floor shows, clear of the HUD pieces marked `data-board-avoid`, which `scene/boardFit.ts` measures (it
+  refits on resize; the site's labels hide meanwhile). Three lives, faster ghosts each level, best score in
   localStorage; Esc or "Quit" puts the floor back. Scriptable as `primeTower.pacman` (`game`, `steer(x, y)`,
   `text()` prints the board). `node scripts/probe-pacman.mjs` plays it headlessly.
 - **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
