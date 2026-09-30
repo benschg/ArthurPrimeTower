@@ -20,11 +20,26 @@ const PAC_R = 0.4;
 const GHOST_R = 0.4;
 const GHOST_H = 0.3; // straight part of the body, under the dome
 const MOUTHS = 8;
+/**
+ * The player has its eyes on top of its head, either side of the mouth: the board is seen
+ * from above. Azimuth is measured from the way it faces, so the widest mouth stays clear.
+ */
+const PAC_EYE = { azimuth: 1.0, elevation: 0.85 };
 const GHOST_COLORS = ["#ff2a1f", "#ff6fc4", "#12cfe0", "#ff9416"];
 const FRIGHT_COLOR = "#2438e8";
 const WALL_COLOR = "#0a1a8f";
 const WALL_GLOW = "#1430e0";
 const WALL_GLOW_AMT = 0.4;
+
+/**
+ * The board is drawn into the front slice of the depth range, which the rest of the scene
+ * (anything more than about a metre from the camera) never reaches. So the tower or a
+ * neighbour that happens to cross the plate cannot cut into the board, while the board's
+ * own pieces still hide one another as usual.
+ */
+const FRONT_SLICE = 0.1;
+const toFront = (renderer: THREE.WebGLRenderer) => renderer.getContext().depthRange(0, FRONT_SLICE);
+const toScene = (renderer: THREE.WebGLRenderer) => renderer.getContext().depthRange(0, 1);
 
 const smooth = (v: number, a: number, b: number) => {
   const t = THREE.MathUtils.clamp((v - a) / (b - a), 0, 1);
@@ -101,6 +116,8 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
       ghost: ghostGeometry(),
       eye: new THREE.SphereGeometry(0.115, 10, 8),
       pupil: new THREE.SphereGeometry(0.06, 8, 6),
+      pacEye: new THREE.SphereGeometry(0.075, 10, 8),
+      pacGlint: new THREE.SphereGeometry(0.028, 6, 5),
       // the player: a ball with a wedge cut out, one geometry per mouth opening
       mouths: Array.from({ length: MOUTHS }, (_, i) => {
         const open = 0.04 + (i / (MOUTHS - 1)) * 1.3;
@@ -121,7 +138,8 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
   const cores = useRef<THREE.InstancedMesh>(null);
   const dots = useRef<THREE.InstancedMesh>(null);
   const powers = useRef<THREE.InstancedMesh>(null);
-  const pac = useRef<THREE.Mesh>(null);
+  const pac = useRef<THREE.Group>(null);
+  const pacBody = useRef<THREE.Mesh>(null);
   const ghosts = useRef<(THREE.Group | null)[]>([]);
   const wallMat = useRef<THREE.MeshStandardMaterial>(null);
   const rimMat = useRef<THREE.MeshStandardMaterial>(null);
@@ -130,6 +148,15 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
   const last = useRef(maze.ghosts.map((g) => ({ x: g.lift.x, y: g.lift.y })));
   const banner = useRef<HTMLDivElement>(null);
   const tmp = useRef({ o: new THREE.Object3D(), v: new THREE.Vector3(), q: new THREE.Quaternion(), c: new THREE.Color() });
+
+  // Every mesh of the board switches the depth range for its own draw call.
+  useLayoutEffect(() => {
+    root.current?.traverse((o) => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      o.onBeforeRender = toFront;
+      o.onAfterRender = toScene;
+    });
+  }, []);
 
   // Walls and cores never move: place the instances once.
   useLayoutEffect(() => {
@@ -213,11 +240,11 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
     }
 
     // the player: the mouth faces the way it goes and chomps while it moves
-    if (pac.current) {
+    if (pac.current && pacBody.current) {
       const p = g.pac;
       const moving = g.phase === "play" && (p.dir.x !== 0 || p.dir.y !== 0);
       const chomp = moving ? Math.abs(Math.sin(t * 13)) : 0.45;
-      pac.current.geometry = geos.mouths[Math.round(chomp * (MOUTHS - 1))];
+      pacBody.current.geometry = geos.mouths[Math.round(chomp * (MOUTHS - 1))];
       pac.current.position.set(p.x, PAC_R + 0.04, p.y);
       pac.current.rotation.y = Math.atan2(p.facing.y, -p.facing.x);
       // caught: it spins and shrinks away
@@ -290,9 +317,26 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
           <instancedMesh ref={powers} args={[geos.power, undefined, Math.max(1, cells.powers.length)]} frustumCulled={false}>
             <meshBasicMaterial color="#fff3d6" toneMapped={false} />
           </instancedMesh>
-          <mesh ref={pac} geometry={geos.mouths[3]}>
-            <meshStandardMaterial color="#ffd91a" emissive="#b98a00" emissiveIntensity={0.7} roughness={0.45} side={THREE.DoubleSide} />
-          </mesh>
+          <group ref={pac}>
+            <mesh ref={pacBody} geometry={geos.mouths[3]}>
+              <meshStandardMaterial color="#ffd91a" emissive="#b98a00" emissiveIntensity={0.7} roughness={0.45} side={THREE.DoubleSide} />
+            </mesh>
+            {/* the mouth opens toward local -x; an eye sits on the skin either side of it */}
+            {[-1, 1].map((side) => {
+              const ce = Math.cos(PAC_EYE.elevation);
+              const dir: [number, number, number] = [-ce * Math.cos(PAC_EYE.azimuth), Math.sin(PAC_EYE.elevation), side * ce * Math.sin(PAC_EYE.azimuth)];
+              return (
+                <group key={side} position={[dir[0] * PAC_R, dir[1] * PAC_R, dir[2] * PAC_R]}>
+                  <mesh geometry={geos.pacEye}>
+                    <meshBasicMaterial color="#1b1408" toneMapped={false} />
+                  </mesh>
+                  <mesh geometry={geos.pacGlint} position={[-0.035, 0.05, 0]}>
+                    <meshBasicMaterial color="#ffffff" toneMapped={false} />
+                  </mesh>
+                </group>
+              );
+            })}
+          </group>
           {maze.ghosts.map((_, i) => (
             <group
               key={i}

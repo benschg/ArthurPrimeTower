@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { newGame, readBest, steer, step, type PacGame, type Phase } from "./game";
 import { getMaze, mazeText } from "./maze";
+import { sound } from "./sound";
 
 /** What the HUD shows; replaced (never mutated) when one of its values changes. */
 export type PacHud = {
@@ -15,9 +16,10 @@ export type PacHud = {
   dots: number;
   best: number;
   newBest: boolean;
+  muted: boolean;
 };
 
-const IDLE: PacHud = { active: false, phase: "ready", score: 0, lives: 0, level: 1, left: 0, dots: 0, best: 0, newBest: false };
+const IDLE: PacHud = { active: false, phase: "ready", score: 0, lives: 0, level: 1, left: 0, dots: 0, best: 0, newBest: false, muted: false };
 
 /**
  * Runs the floor-13 game. The board steps it once per rendered frame and reads the actors
@@ -31,6 +33,7 @@ class Pacman {
 
   start(): this {
     this.game = newGame(getMaze(), readBest());
+    sound.start();
     this.publish();
     return this;
   }
@@ -45,6 +48,14 @@ class Pacman {
   /** Steer toward a direction on screen: x to the right, y up. */
   steer(sx: number, sy: number): this {
     if (this.game) steer(this.game, sx, sy);
+    sound.wake(); // a key or a tap is what lets the browser start the audio
+    return this;
+  }
+
+  toggleSound(): this {
+    sound.setMuted(!sound.muted);
+    sound.wake();
+    this.publish();
     return this;
   }
 
@@ -58,6 +69,8 @@ class Pacman {
       step(g, s);
       left -= s;
     }
+    for (const e of g.events) sound.play(e);
+    g.events.length = 0;
     this.publish();
   }
 
@@ -78,7 +91,7 @@ class Pacman {
   private publish(): void {
     const g = this.game;
     const next: PacHud = g
-      ? { active: true, phase: g.phase, score: g.score, lives: g.lives, level: g.level, left: g.left, dots: g.maze.dots, best: Math.max(g.best, g.score), newBest: g.newBest }
+      ? { active: true, phase: g.phase, score: g.score, lives: g.lives, level: g.level, left: g.left, dots: g.maze.dots, best: Math.max(g.best, g.score), newBest: g.newBest, muted: sound.muted }
       : IDLE;
     const cur = this.hud;
     const same = (Object.keys(next) as (keyof PacHud)[]).every((k) => cur[k] === next[k]);

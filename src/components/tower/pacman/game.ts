@@ -34,6 +34,9 @@ export type Ghost = {
 
 export type Phase = "ready" | "play" | "caught" | "clear" | "over";
 
+/** Things that just happened, for whoever makes the noise. */
+export type PacEvent = "dot" | "power" | "ghost" | "caught" | "clear" | "over";
+
 export type PacGame = {
   maze: Maze;
   pellets: Uint8Array;
@@ -58,6 +61,8 @@ export type PacGame = {
   clock: number;
   /** where the grid's x and y axes point on screen, so an arrow key means what it looks like */
   basis: { x: [number, number]; y: [number, number] };
+  /** what happened since the queue was last emptied (the store drains it every frame) */
+  events: PacEvent[];
 };
 
 export const LIVES = 3;
@@ -128,6 +133,7 @@ export function newGame(maze: Maze, best: number): PacGame {
     wave: 0,
     clock: 0,
     basis: { x: [1, 0], y: [0, -1] },
+    events: [],
   };
   placeActors(g);
   return g;
@@ -267,6 +273,7 @@ function eat(g: PacGame): void {
   if (!kind) return;
   g.pellets[idx(m, cx, cy)] = 0;
   g.left--;
+  g.events.push(kind === 2 ? "power" : "dot");
   if (kind === 2) {
     addScore(g, 50);
     g.fright = frightTime(g.level);
@@ -282,6 +289,7 @@ function eat(g: PacGame): void {
   }
   if (g.left <= 0) {
     addScore(g, 500 + 100 * g.level);
+    g.events.push("clear");
     g.phase = "clear";
     g.phaseT = CLEAR_TIME;
   }
@@ -333,10 +341,12 @@ function meet(g: PacGame): void {
       addScore(g, 200 * 2 ** g.combo);
       g.combo = Math.min(3, g.combo + 1);
       gh.mode = "eyes";
+      g.events.push("ghost");
       continue;
     }
     g.phase = "caught";
     g.phaseT = CAUGHT_TIME;
+    g.events.push("caught");
     return;
   }
 }
@@ -389,6 +399,7 @@ export function step(g: PacGame, dt: number): void {
       g.lives--;
       if (g.lives <= 0) {
         g.phase = "over";
+        g.events.push("over");
         g.newBest = g.score > g.best;
         if (g.newBest) {
           g.best = g.score;

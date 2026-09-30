@@ -19,11 +19,22 @@ export function PacmanHud({ lang, onQuit }: { lang: Lang; onQuit: () => void }) 
         <p className="font-mono text-[11px] text-muted">
           {t.level} {g.level}
         </p>
-        {!over && (
-          <button onClick={onQuit} className="font-mono text-[11px] text-muted hover:text-accent" aria-label={t.quit} title={t.quit}>
-            ✕
+        <span className="flex items-center gap-3">
+          <button
+            onClick={() => pacman.toggleSound()}
+            className={"hover:text-accent " + (g.muted ? "text-muted/60" : "text-muted")}
+            aria-label={g.muted ? t.soundOff : t.soundOn}
+            aria-pressed={!g.muted}
+            title={g.muted ? t.soundOff : t.soundOn}
+          >
+            <Speaker on={!g.muted} />
           </button>
-        )}
+          {!over && (
+            <button onClick={onQuit} className="font-mono text-[11px] text-muted hover:text-accent" aria-label={t.quit} title={t.quit}>
+              ✕
+            </button>
+          )}
+        </span>
       </div>
 
       {over ? (
@@ -90,6 +101,15 @@ export function PacmanHud({ lang, onQuit }: { lang: Lang; onQuit: () => void }) 
         </>
       )}
     </div>
+  );
+}
+
+function Speaker({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 6h2.5L8 3v10L4.5 10H2z" fill="currentColor" />
+      {on ? <path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9" /> : <path d="M10.5 6l4 4M14.5 6l-4 4" />}
+    </svg>
   );
 }
 

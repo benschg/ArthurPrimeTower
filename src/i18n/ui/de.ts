@@ -164,6 +164,8 @@ export const de: typeof en = {
     newBest: "Neuer Rekord!",
     again: "Nochmal",
     quit: "Beenden",
+    soundOn: "Ton ist an",
+    soundOff: "Ton ist aus",
     steer: { up: "Hoch", down: "Runter", left: "Links", right: "Rechts" },
   },
   game: {

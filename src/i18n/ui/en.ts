@@ -162,6 +162,8 @@ export const en = {
     newBest: "New best!",
     again: "Again",
     quit: "Quit",
+    soundOn: "Sound is on",
+    soundOff: "Sound is off",
     steer: { up: "Up", down: "Down", left: "Left", right: "Right" },
   },
   game: {

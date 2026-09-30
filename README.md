@@ -58,7 +58,9 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   Arrow keys or WASD steer by screen direction, so they stay right however the plate is dragged around; touch
   screens get a pad, and upright screens turn the board on end. The board is centred in the view and sized so the
   whole floor shows, clear of the HUD pieces marked `data-board-avoid`, which `scene/boardFit.ts` measures (it
-  refits on resize; the site's labels hide meanwhile). Three lives, faster ghosts each level, best score in
+  refits on resize; the site's labels hide meanwhile), and drawn into a reserved front slice of the depth range so
+  nothing that crosses the plate can cut into it. Sounds are synthesised with Web Audio (`pacman/sound.ts`, mute
+  button in the HUD). Three lives, faster ghosts each level, best score in
   localStorage; Esc or "Quit" puts the floor back. Scriptable as `primeTower.pacman` (`game`, `steer(x, y)`,
   `text()` prints the board). `node scripts/probe-pacman.mjs` plays it headlessly.
 - **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
@@ -88,7 +90,7 @@ src/components/tower/
     hdri.ts / textures.ts / helpers.ts / types.ts
   geometry/              measured geometry: footprint & stages, structure (cores, columns,
                          drawing frame), site (OSM footprints, garage, parking)
-  pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts
+  pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts, sound.ts
   interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions
   Interiors.tsx          instanced rendering of the fit-out, lift cables and cars
   facadeShader.ts        GLSL facade material
