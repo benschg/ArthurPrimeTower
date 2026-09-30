@@ -41,6 +41,13 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   `setAll(1)`, `setFloor(24, 1)`, `setFacade(21, 3, 0.6)` (edge index as in `geometry`, 3 = Hardbrücke side),
   `set(f, pane, amount)`, `map((floor, pane, edge) => amount)`, `setFromSun([east, north])`, `randomize()`;
   add `.snap()` to skip the glide. `node scripts/probe-blinds.mjs` exercises all of it.
+- **Type the tower** (`src/components/tower/typing/`): click the "P" of the title. The camera squares up to the
+  Hardbrücke facade, where three characters are drawn with the blinds as a 5 x 7 dot matrix (floors 26 to 32, amber
+  glow so they read by day and night). Type them and the next three glide in. Rounds shorten from 10 s toward 3.5 s
+  and the character set grows from easy capitals to all letters, then digits, then look-alikes. A wrong key costs a
+  second and the streak; each character bursts a little confetti, each round more, every fifth round a shower. Score,
+  streak and best (localStorage) live in the bottom-left card; Esc quits and the blinds return to how they were.
+  Phones get the soft keyboard through a hidden input. `node scripts/probe-typing.mjs` plays a game headlessly.
 - **Floor picking** uses one invisible solid volume per floor (the footprint extruded over the full slot, from the
   middle of the gap below to the middle of the gap above), so the pointer never falls between floors in the
   exploded view. The volumes ignore the hover bulge, so the bulge cannot chase its own movement.

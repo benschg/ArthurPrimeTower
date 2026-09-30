@@ -125,6 +125,8 @@ export function GlassStages({
       });
     }
     const u = m.uniforms;
+    u.uBlindColor.value.copy(blinds.tint);
+    u.uBlindGlow.value = blinds.glow;
     u.uNight.value = THREE.MathUtils.damp(u.uNight.value, night ? 1 : 0, 3, dt);
     u.uOpacity.value = THREE.MathUtils.damp(u.uOpacity.value, dim ? 0.14 : 1, 6, dt);
     u.uEnvIntensity.value = THREE.MathUtils.damp(u.uEnvIntensity.value, night ? 0.3 : 1.15, 3, dt);

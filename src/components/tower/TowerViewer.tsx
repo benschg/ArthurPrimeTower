@@ -18,6 +18,9 @@ import { IconExploded, IconRotate, IconStacked, IconStill, Switch } from "./view
 import type { CleanState, ViewerState } from "./TowerScene";
 import { Celebration } from "./viewer/Celebration";
 import { FloorPlanLink } from "./viewer/FloorPlanLink";
+import type { TypingState } from "./typing/game";
+import { useTypingGame } from "./typing/useTypingGame";
+import { Bursts, TypingHud } from "./viewer/TypingHud";
 
 const TowerScene = dynamic(() => import("./TowerScene"), {
   ssr: false,
@@ -32,7 +35,7 @@ const idleClean: CleanState = { active: false, progress: 0, secondsLeft: 60 };
 declare global {
   interface Window {
     /** Scripting hooks, e.g. primeTower.blinds.setFloor(21, 1) in the console. */
-    primeTower?: { blinds: Blinds };
+    primeTower?: { blinds: Blinds; typingChars: () => string; typingState: () => TypingState };
   }
 }
 
@@ -50,6 +53,7 @@ export function TowerViewer() {
     hovered: null,
     selected: null,
     cleaning: idleClean,
+    typing: false,
   });
   const [unitHover, setUnitHover] = useState(false);
 
@@ -90,12 +94,21 @@ export function TowerViewer() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+
+  // Typing game on the facade: started from the "P" in the title.
+  const quitTyping = useCallback(() => setState((s) => ({ ...s, typing: false })), []);
+  const typingGame = useTypingGame(quitTyping);
+  const typingState = typingGame.game;
   useEffect(() => {
-    window.primeTower = { blinds };
+    window.primeTower = { blinds, typingChars: () => typingState.chars, typingState: () => typingState };
     return () => {
       delete window.primeTower;
     };
-  }, []);
+  }, [typingState]);
+  const startTyping = () => {
+    setState((s) => ({ ...s, typing: true, hovered: null, selected: null, explode: false, showGarage: false, cleaning: idleClean }));
+    typingGame.start();
+  };
 
   const stopCleaning = () => setState((s) => ({ ...s, cleaning: idleClean }));
   const restartCleaning = () => {
@@ -132,6 +145,7 @@ export function TowerViewer() {
         onCleanProgress={onCleanProgress}
         onHoverUnit={setUnitHover}
       />
+      <Bursts bursts={typingGame.bursts} />
       {success && <Celebration title={g.success} text={g.timeUsed(Math.round(60 - clean.secondsLeft))} />}
       {/* Legibility gradients over the HDRI sky */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-ink/80 to-transparent" />
@@ -141,7 +155,20 @@ export function TowerViewer() {
       <div className="absolute left-4 top-4 sm:left-8 sm:top-8 pointer-events-none max-w-[60vw]">
         <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-accent">{t.eyebrow}</p>
         <h1 className="mt-2 text-4xl sm:text-6xl font-semibold tracking-tight leading-[0.95]">
-          Prime
+          <button
+            type="button"
+            onClick={(e) => {
+              // drop focus first: a focused button that then gets disabled would swallow the game's keys
+              e.currentTarget.blur();
+              if (!state.typing && !clean.active) startTyping();
+            }}
+            aria-label={ui[lang].typing.startLabel}
+            title={ui[lang].typing.startLabel}
+            className="pointer-events-auto cursor-pointer rounded-sm transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-none"
+          >
+            P
+          </button>
+          rime
           <br />
           Tower
         </h1>
@@ -168,13 +195,13 @@ export function TowerViewer() {
           onToggle={() => toggle("autoRotate")}
           label={t.toggles.autoRotate[0]}
           hint={t.toggles.autoRotate[1]}
-          disabled={clean.active}
+          disabled={clean.active || state.typing}
           left={<IconStill />}
           right={<IconRotate spinning={state.autoRotate} />}
         />
         <DayNightToggle
           night={state.night}
-          onToggle={() => !clean.active && toggle("night")}
+          onToggle={() => !clean.active && !state.typing && toggle("night")}
           label={t.toggles.night[0]}
           hint={t.toggles.night[1]}
         />
@@ -183,7 +210,7 @@ export function TowerViewer() {
           onToggle={() => toggle("explode")}
           label={t.toggles.explode[0]}
           hint={t.toggles.explode[1]}
-          disabled={clean.active}
+          disabled={clean.active || state.typing}
           left={<IconStacked />}
           right={<IconExploded />}
         />
@@ -191,7 +218,9 @@ export function TowerViewer() {
 
       {/* Bottom-left card: floor info, or the cleaning HUD */}
       <div className="z-20 absolute left-4 bottom-4 sm:left-8 sm:bottom-8 glass rounded-xl p-4 w-[calc(100%-2rem)] sm:w-80 pointer-events-none">
-        {clean.active ? (
+        {state.typing ? (
+          <TypingHud game={typingGame.game} lang={lang} onAgain={typingGame.start} onQuit={typingGame.stop} onKey={typingGame.pressKey} />
+        ) : clean.active ? (
           <div className="pointer-events-auto">
             <p className="font-mono text-[11px] uppercase tracking-widest text-accent">{g.title}</p>
             <div className="mt-2 flex items-baseline justify-between font-mono text-sm">
@@ -277,7 +306,7 @@ export function TowerViewer() {
       <div
         className={
           "absolute right-4 bottom-4 sm:right-8 sm:bottom-8 hidden lg:flex flex-col items-end gap-1 font-mono text-[10px] text-muted pointer-events-none " +
-          (focus !== null || clean.active ? "opacity-0" : "")
+          (focus !== null || clean.active || state.typing ? "opacity-0" : "")
         }
       >
         <span>▲ {TOWER_HEIGHT.toFixed(0)} m</span>

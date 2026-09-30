@@ -20,6 +20,11 @@ export class Blinds {
   readonly texture: THREE.DataTexture;
   /** Ease rate toward the target, per second. Larger = snappier. */
   speed = 2.5;
+  /** Blind colour and glow as the shader sees them; eased toward the targets set by setStyle. */
+  readonly tint = new THREE.Color(0.5, 0.49, 0.46);
+  glow = 0;
+  private readonly tintTarget = new THREE.Color(0.5, 0.49, 0.46);
+  private glowTarget = 0;
   private readonly data = new Uint8Array(BLIND_PANES * FLOORS);
   private readonly target = new Float32Array(BLIND_PANES * FLOORS);
   private readonly current = new Float32Array(BLIND_PANES * FLOORS);
@@ -111,6 +116,27 @@ export class Blinds {
     });
   }
 
+  /** Colour (linear RGB 0..1) and self-glow of lowered blinds; eased like the blinds themselves. */
+  setStyle(color: [number, number, number], glow: number): this {
+    this.tintTarget.setRGB(color[0], color[1], color[2]);
+    this.glowTarget = glow;
+    return this;
+  }
+
+  resetStyle(): this {
+    return this.setStyle([0.5, 0.49, 0.46], 0);
+  }
+
+  /** Copy of every pane's target, for restoring after a temporary takeover. */
+  snapshot(): Float32Array {
+    return new Float32Array(this.target);
+  }
+
+  restore(snap: Float32Array): this {
+    this.target.set(snap);
+    return this;
+  }
+
   /** Jump to the target immediately instead of easing. */
   snap(): this {
     this.current.set(this.target);
@@ -121,6 +147,8 @@ export class Blinds {
   /** Ease toward the target; call once per frame. Returns true when the texture changed. */
   update(dt: number): boolean {
     const k = 1 - Math.exp(-this.speed * Math.max(dt, 0));
+    this.tint.lerp(this.tintTarget, k);
+    this.glow += (this.glowTarget - this.glow) * k;
     let changed = this.dirty;
     for (let i = 0; i < this.current.length; i++) {
       const c = this.current[i];

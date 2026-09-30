@@ -9,6 +9,8 @@ export type ViewerState = {
   hovered: number | null;
   selected: number | null;
   cleaning: CleanState;
+  /** the typing game has the facade and the camera */
+  typing: boolean;
 };
 
 export type SceneProps = ViewerState & {

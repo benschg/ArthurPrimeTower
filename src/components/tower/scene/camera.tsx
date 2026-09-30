@@ -5,6 +5,7 @@ import { entrances } from "../entrances";
 import { EDGE_SE, edgeOutwardNormal, stages } from "../geometry";
 import type { ControlsLike } from "./helpers";
 import { useFacadeFrame } from "./maintenance";
+import { TYPING_FOCUS_Y } from "../typing/game";
 
 /**
  * Eases the orbit target and camera distance when a mode changes (garage → look low,
@@ -13,17 +14,18 @@ import { useFacadeFrame } from "./maintenance";
 export function CameraRig({
   showGarage,
   explode,
-  cleaning,
+  facing,
   controlsRef,
 }: {
   showGarage: boolean;
   explode: boolean;
-  cleaning: boolean;
+  /** square up to the Hardbruecke facade for a game */
+  facing: "none" | "cleaning" | "typing";
   controlsRef: RefObject<ControlsLike | null>;
 }) {
   const size = useThree((st) => st.size);
   const portrait = size.height > size.width;
-  const mode = cleaning ? "cleaning" : showGarage ? "garage" : explode ? "explode" : "default";
+  const mode = facing !== "none" ? facing : showGarage ? "garage" : explode ? "explode" : "default";
   const facade = useFacadeFrame();
   const goal = useRef(new THREE.Vector3());
   const anim = useRef({ until: 0, mode: "" });
@@ -52,13 +54,13 @@ export function CameraRig({
     const c = controlsRef.current;
     if (!c) return;
     const camera = st.camera;
-    if (cleaning) {
-      // Face the Hardbruecke facade square-on, far enough to see the whole cleaning area.
+    if (facing !== "none") {
+      // Face the Hardbruecke facade square-on: the whole cleaning area, or the glyph rows.
       const { a, along, out, len, lowY, highY } = facade;
       const mx = a[0] + (along[0] * len) / 2;
       const mz = -(a[1] + (along[1] * len) / 2);
-      const my = (lowY + highY) / 2;
-      const dist = portrait ? 215 : 150;
+      const my = facing === "typing" ? TYPING_FOCUS_Y : (lowY + highY) / 2;
+      const dist = facing === "typing" ? (portrait ? 150 : 95) : portrait ? 215 : 150;
       goal.current.set(mx + out[0] * dist, my + 6, mz - out[1] * dist);
       c.target.x = THREE.MathUtils.damp(c.target.x, mx, 3, dt);
       c.target.y = THREE.MathUtils.damp(c.target.y, my, 3, dt);

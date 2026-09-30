@@ -51,6 +51,8 @@ uniform vec3 uGlassTint;
 uniform vec3 uGround;
 uniform sampler2D uBlinds; // one byte per pane per floor, 0 = raised, 255 = fully lowered
 uniform vec2 uBlindsSize; // (panes, floors)
+uniform vec3 uBlindColor;
+uniform float uBlindGlow;
 
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
@@ -218,7 +220,7 @@ void main() {
   float blind = step(0.004, bl) * step(blindTo, v) * (1.0 - step(roomH, v));
   float slatHard = 0.85 + 0.15 * step(0.5, fract(v / 0.08));
   float slat = mix(0.925, slatHard, 1.0 - smoothstep(0.015, 0.06, fwidth(v))); // 8 cm slats alias fast
-  vec3 blindCol = vec3(0.5, 0.49, 0.46) * slat * ((1.0 - uNight) * 0.35 + lit * mix(0.25, 0.6, uNight));
+  vec3 blindCol = uBlindColor * slat * ((1.0 - uNight) * 0.35 + lit * mix(0.25, 0.6, uNight) + uBlindGlow);
   room = mix(room, blindCol, blind);
 
   // spandrel: the same outer glass over a dark insulated back panel
@@ -275,6 +277,8 @@ export type FacadeUniforms = {
   uGround: { value: THREE.Color };
   uBlinds: { value: THREE.Texture };
   uBlindsSize: { value: THREE.Vector2 };
+  uBlindColor: { value: THREE.Color };
+  uBlindGlow: { value: number };
 };
 
 export function createFacadeUniforms(): FacadeUniforms {
@@ -294,6 +298,8 @@ export function createFacadeUniforms(): FacadeUniforms {
     uGround: { value: new THREE.Color("#161d27") },
     uBlinds: { value: blinds.texture },
     uBlindsSize: { value: new THREE.Vector2(BLIND_PANES, FLOORS) },
+    uBlindColor: { value: new THREE.Color(0.5, 0.49, 0.46) },
+    uBlindGlow: { value: 0 },
   };
 }
 

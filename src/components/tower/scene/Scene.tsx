@@ -16,10 +16,12 @@ import { CameraRig } from "./camera";
 import { Blender } from "./blender";
 
 export function Scene(props: SceneProps) {
-  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
+  const { night, showGarage, showTenants, explode, autoRotate, hovered, selected, cleaning, typing, lang, onHover, onSelect, onStartCleaning, onCleanProgress, onHoverUnit } = props;
+  // a game owns the facade, the camera and the pointer
+  const busy = cleaning.active || typing;
   const labelFloor = selected ?? hovered;
   const [peek, setPeek] = useState(false);
-  const garageOpen = showGarage || explode || (peek && !cleaning.active);
+  const garageOpen = showGarage || explode || (peek && !busy);
   const [skyNight, setSkyNight] = useState(night);
   const [garageMounted, setGarageMounted] = useState(false);
   const explodeRef = useRef<ExplodeState>({ gap: 0, thin: 1, hoverF: -1, hoverAmt: 0 });
@@ -43,7 +45,7 @@ export function Scene(props: SceneProps) {
     x.gap = THREE.MathUtils.damp(x.gap, explode ? EXPLODE_GAP : 0, 4, dt);
     x.thin = THREE.MathUtils.damp(x.thin, explode ? 0.12 : 1, 4, dt);
     // dock-style bulge around the hovered floor (explode view only, not while a floor is pulled out)
-    const bulgeOn = explode && hovered !== null && selected === null && !cleaning.active;
+    const bulgeOn = explode && hovered !== null && selected === null && !busy;
     if (bulgeOn && hovered !== null) {
       x.hoverF = x.hoverAmt < 0.02 ? hovered : THREE.MathUtils.damp(x.hoverF, hovered, 10, dt);
     }
@@ -55,7 +57,7 @@ export function Scene(props: SceneProps) {
 
     const ex = extractRef.current;
     const prev = outgoingRef.current;
-    const sel = selected !== null && !cleaning.active;
+    const sel = selected !== null && !busy;
     // Selecting another floor while one is out: hand the current one to the outgoing slot so
     // it retracts while the new one opens and pops out at the same time.
     if (sel && ex.floor >= 0 && ex.floor !== selected) {
@@ -170,7 +172,7 @@ export function Scene(props: SceneProps) {
           selected={selected}
           onHover={onHover}
           onSelect={onSelect}
-          interactive={!cleaning.active}
+          interactive={!busy}
           explodeRef={explodeRef}
           extractRef={extractRef} outgoingRef={outgoingRef}
           onPlateDrag={onPlateDrag}
@@ -178,7 +180,7 @@ export function Scene(props: SceneProps) {
         />
         <Interiors explodeRef={explodeRef} extractRef={extractRef} outgoingRef={outgoingRef} active={interiorsActive} />
         <Entrances />
-        {labelFloor !== null && !cleaning.active && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
+        {labelFloor !== null && !busy && selected === null && <FloorLabel floor={labelFloor} explode={explode} lang={lang} />}
       </group>
 
       <Site lang={lang} />
@@ -189,8 +191,8 @@ export function Scene(props: SceneProps) {
         ref={controlsRef as never}
         makeDefault
         enablePan={false}
-        enabled={!cleaning.active}
-        autoRotate={autoRotate && !cleaning.active}
+        enabled={!busy}
+        autoRotate={autoRotate && !busy}
         autoRotateSpeed={0.5}
         zoomToCursor
         minDistance={explode ? 14 : 45}
@@ -198,7 +200,7 @@ export function Scene(props: SceneProps) {
         maxPolarAngle={showGarage ? Math.PI * 0.64 : Math.PI * 0.495}
         target={[0, 58, 0]}
       />
-      <CameraRig showGarage={showGarage} explode={explode} cleaning={cleaning.active} controlsRef={controlsRef} />
+      <CameraRig showGarage={showGarage} explode={explode} facing={cleaning.active ? "cleaning" : typing ? "typing" : "none"} controlsRef={controlsRef} />
     </>
   );
 }

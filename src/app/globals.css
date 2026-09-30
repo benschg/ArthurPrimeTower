@@ -168,3 +168,45 @@ body {
     display: none;
   }
 }
+
+/* Typing game: confetti bursts and the miss shake */
+.burst {
+  animation: burst-fly var(--dur, 1s) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes burst-fly {
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(540deg) scale(0.5);
+    opacity: 0;
+  }
+}
+.hud-shake {
+  animation: hud-shake 0.35s ease-out;
+}
+@keyframes hud-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .burst {
+    display: none;
+  }
+  .hud-shake {
+    animation: none;
+  }
+}
