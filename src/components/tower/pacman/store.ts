@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { newGame, readBest, steer, step, type PacGame, type Phase } from "./game";
 import { getMaze, mazeText } from "./maze";
 import { sound } from "./sound";
+import { useGamepad } from "../gamepad";
 
 /** What the HUD shows; replaced (never mutated) when one of its values changes. */
 export type PacHud = {
@@ -129,8 +130,16 @@ const KEYS: Record<string, [number, number]> = {
   s: [0, -1],
 };
 
-/** Arrow keys or WASD steer, Enter plays again after a game over, Esc quits. */
+/**
+ * Arrow keys or WASD steer, Enter plays again after a game over, Esc quits. A gamepad does the
+ * same with the d-pad or stick, A or Start, and Back/Select.
+ */
 export function usePacmanKeys(active: boolean, onQuit: () => void): void {
+  useGamepad(active, {
+    onDir: (dx, dy) => pacman.steer(dx, dy),
+    onConfirm: () => pacman.game?.phase === "over" && pacman.start(),
+    onBack: onQuit,
+  });
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {

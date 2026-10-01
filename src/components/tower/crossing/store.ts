@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { sound, type Note } from "../pacman/sound";
 import { levelOf, move, newGame, readBest, step, type CrossEvent, type CrossGame, type CrossPhase } from "./game";
 import { CALM, road } from "./road";
+import { useGamepad } from "../gamepad";
 
 /** What the HUD shows; replaced (never mutated) when one of its values changes. */
 export type CrossHud = {
@@ -145,8 +146,17 @@ const KEYS: Record<string, [number, number]> = {
   s: [0, -1],
 };
 
-/** Arrow keys or WASD hop, Enter plays again after a game over, Esc quits. */
+/**
+ * Arrow keys or WASD hop, Enter plays again after a game over, Esc quits. A gamepad does the
+ * same with the d-pad or stick (held, it keeps hopping like a held key), A or Start, and Back/Select.
+ */
 export function useCrossingKeys(active: boolean, onQuit: () => void): void {
+  useGamepad(active, {
+    onDir: (dx, dy) => crossing.move(dx, dy),
+    repeat: true,
+    onConfirm: () => crossing.game?.phase === "over" && crossing.start(),
+    onBack: onQuit,
+  });
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {

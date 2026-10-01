@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { CALM, road } from "../crossing/road";
 import { sound, type Note } from "../pacman/sound";
 import { FINISH, newGame, readBest, START, steer, step, type RaceEvent, type RaceGame, type RacePhase } from "./game";
+import { useGamepad } from "../gamepad";
 
 /** What the HUD shows; replaced (never mutated) when one of its values changes. */
 export type RaceHud = {
@@ -155,8 +156,17 @@ const RIGHT = new Set(["ArrowRight", "d"]);
 const BRAKE = new Set(["ArrowDown", "s"]);
 const GAS = new Set(["ArrowUp", "w"]); // the car accelerates by itself; the keys just must not scroll the page
 
-/** Left and right change lane, down brakes while held, Enter races again once done, Esc quits. */
+/**
+ * Left and right change lane, down brakes while held, Enter races again once done, Esc quits.
+ * A gamepad: d-pad or stick left and right, down or the left trigger to brake, A or Start, Back/Select.
+ */
 export function useRaceKeys(active: boolean, onQuit: () => void): void {
+  useGamepad(active, {
+    onDir: (dx) => dx && race.steer(dx),
+    onDownHeld: (held) => race.brake(held),
+    onConfirm: () => race.game?.phase === "done" && race.start(),
+    onBack: onQuit,
+  });
   useEffect(() => {
     if (!active) return;
     const name = (e: KeyboardEvent) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
