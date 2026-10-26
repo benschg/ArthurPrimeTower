@@ -5,6 +5,9 @@
  */
 export type Shot = { cannon: number | "all"; count: number; power: number };
 
+/** The paper colours, of the roof cannons' confetti and of the window-cleaning celebration. */
+export const CONFETTI_COLORS = ["#7dd3c0", "#4f8fd6", "#f2c14e", "#e25c4a", "#a78bfa", "#ffffff"];
+
 const queue: Shot[] = [];
 
 export const confettiCannons = {

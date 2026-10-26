@@ -10,18 +10,18 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   ramp from OpenStreetMap. Modes: tenants, explode, garage, night, auto-rotate. Hover or click a floor for details.
 - **Data** (`src/data/tower.ts`): facts, timeline, architecture notes, garage, annexes, tenants with floors, floor
   bands for the model, links to the published floor plans and sections, and all sources.
-- **Facade shader** (`src/components/tower/facadeShader.ts`): a GLSL3 ShaderMaterial that samples an equirectangular
+- **Facade shader** (`src/components/tower/scene/facadeGlsl.ts`, material in `facadeShader.ts`): a GLSL3 ShaderMaterial that samples an equirectangular
   HDRI directly (mip-blurred by roughness, Schlick Fresnel so the glass turns from emerald to mirror at grazing angles),
   with a night mask that lights individual windows. Day uses a partly cloudy sky, night a city waterfront so the lights
   reflect in the glass. HDRIs in `public/hdri/` are CC0 from [Poly Haven](https://polyhaven.com/)
   (`kloofendal_48d_partly_cloudy_puresky`, `shanghai_bund`).
 - **Languages**: German by default, English via the toggle in the nav and viewer. The choice is kept in
-  localStorage (`prime-tower-lang`), not in the URL. UI strings live in `src/i18n/ui.ts`; data fields are
+  localStorage (`prime-tower-lang`), not in the URL. UI strings live in `src/i18n/ui/`; data fields are
   bilingual `{ en, de }` objects in `src/data/tower.ts`.
 - **Maintenance unit and game**: a facade-access cradle patrols the Hardbrücke facade. Click it (or open `/#clean`)
   to play a 60-second window-cleaning game: move the pointer over the facade to steer the cradle and squeegee the
   dirt layer away.
-- **Exploded interiors** (`src/components/tower/interiorLayout.ts`, `Interiors.tsx`): in Explode mode the plates thin
+- **Exploded interiors** (`src/components/tower/interiorLayout.ts`, `scene/interiors.tsx`): in Explode mode the plates thin
   out and every floor shows its fit-out, derived from the 31st-floor plan: cellular offices along each facade with desk,
   chair and screen, a ring corridor with doors, corner meeting rooms, two banks of four lifts facing a lobby in the main
   core, a fire lift and stairs in the north-east core, a lobby with reception on the ground floor, conference tables on
@@ -68,11 +68,11 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
   screens get a pad, and upright screens turn the board on end. The board is centred in the view and sized so the
   whole floor shows, clear of the HUD pieces marked `data-board-avoid`, which `scene/boardFit.ts` measures (it
   refits on resize; the site's labels hide meanwhile), and drawn into a reserved front slice of the depth range so
-  nothing that crosses the plate can cut into it. Sounds are synthesised with Web Audio (`pacman/sound.ts`, mute
+  nothing that crosses the plate can cut into it. Sounds are synthesised with Web Audio (`sound.ts`, shared by the games; mute
   button in the HUD). Three lives, faster ghosts each level, best score in
   localStorage; Esc or "Quit" puts the floor back. Scriptable as `primeTower.pacman` (`game`, `steer(x, y)`,
   `text()` prints the board). `node scripts/probe-pacman.mjs` plays it headlessly.
-- **Traffic and trains** (`scene/traffic.tsx`, `crossing/road.ts`): cars, vans and a VBZ bus each way cross the
+- **Traffic and trains** (`scene/traffic.tsx`, `scene/trains.tsx`, `crossing/road.ts`): cars, vans and a VBZ bus each way cross the
   Hardbrücke, keeping right; each lane is a ring in which vehicles hold their own pace and slow down behind slower
   ones. Lamps glow and headlight pools fade in at night. On the railway an S-Bahn brakes, stops under the bridge at
   Bahnhof Hardbrücke and pulls away again, and a locomotive-hauled train runs through, both keeping left.
@@ -100,33 +100,39 @@ A Next.js 16 + React Three Fiber site about the Prime Tower (Gigon/Guyer, 2011) 
 
 ```
 src/components/tower/
-  TowerViewer.tsx        client wrapper: state, HUD, mode buttons, floor card
-  viewer/                HUD pieces (Celebration, FloorPlanLink)
-  TowerScene.tsx         the Canvas; re-exports the viewer state types
-  scene/                 one module per subsystem of the 3D scene
-    Scene.tsx            composition, explode/pull-out choreography, camera binding
-    glass.tsx            per-floor glass rings with the facade shader, roof group
-    floors.tsx           floor plates (hover/click/pull-out), structure, labels
-    roof.tsx             parapet, plant room, mast, aviation lights
-    maintenance.tsx      cradle, dirt layer and the window-cleaning game
-    pacman.tsx           the floor-13 game board on the pulled-out plate
-    traffic.tsx          vehicles on the bridge, trains on the railway
+  TowerViewer.tsx        client wrapper: viewer state, games, deep links; lays out the pieces in viewer/
+  viewer/                DOM over the scene: title, switches, floor card, HUD of each game (shared parts in hud.tsx)
+  TowerScene.tsx         the Canvas: pixel ratio, pausing while scrolled out of view
+  scene/                 everything that touches three.js, one module per subsystem
+    Scene.tsx            composition only
+    stage.ts             per-frame state shared through context (explode, pull-out, day/night and garage blends)
+    useStackMotion.ts    explode/pull-out choreography, camera binding of a pulled-out plate
+    atmosphere.tsx       lights, fog, sky and the day/night fade; nightSky.tsx, hdri.ts, palette.ts
+    tower.tsx            the tower: glass.tsx (rings, facade material from facadeShader.ts / facadeGlsl.ts),
+                         floors.tsx (plates, structure, labels), interiors.tsx, roof.tsx, maintenance.tsx
+                         (cradle and the window-cleaning game), entrances.tsx, cannons.tsx, pacman.tsx
+    site.tsx             ground, neighbours, bridge, railway; traffic.tsx, trains.tsx, parts.ts (vehicle boxes)
     crossing.tsx         the frog and camera view of the bridge game
     race.tsx             cars, finish gantry and chase camera of the sprint
-    entrances.tsx        doors and canopy on the ground floor
-    site.tsx / garage.tsx neighbours, bridge, railway; two-level garage and peek target
-    camera.tsx / blender.tsx  mode transitions; day/night and garage fades
-    hdri.ts / textures.ts / helpers.ts / types.ts
+    garage.tsx           two-level garage, its fade and the peek target
+    camera.tsx           orbit controls and the mode transitions
+    boardFit.ts / helpers.ts / textures.ts / types.ts
   geometry/              measured geometry: footprint & stages, structure (cores, columns,
                          drawing frame), site (OSM footprints, garage, parking)
-  pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts, sound.ts
+  gameStore.ts           what the game stores share: HUD snapshots for React, keyboard and gamepad
+  sound.ts               Web Audio notes for every game
+  pacman/                floor-13 game: maze.ts (board from the plan), game.ts (simulation), store.ts
   crossing/              bridge game: road.ts (lanes and vehicles), game.ts (rules), store.ts
   race/                  the sprint along the bridge: game.ts (rules, rivals), store.ts
-  interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions
-  Interiors.tsx          instanced rendering of the fit-out, lift cables and cars
-  facadeShader.ts        GLSL facade material
+  typing/                type the tower: game.ts (rounds, painting the blinds), useTypingGame.ts, cannons.ts
+  blinds.ts / windows.ts / paneField.ts / facadeLife.ts   the facade's panes, three.js-free
+  interiorLayout.ts      instanced fit-out per floor;  entrances.ts  door positions;  math.ts  shared helpers
+src/lib/                 storage (localStorage that never throws), useHash, useDialogKeys
 src/i18n/ui/             en.ts, de.ts and the ui index
 ```
+
+Only `scene/` and `TowerScene.tsx` import three.js, and `TowerScene` is loaded with `next/dynamic`, so the page's first
+JavaScript carries none of it. Keep it that way: logic the DOM side needs (games, blinds, geometry) stays three-free.
 
 ## Run
 

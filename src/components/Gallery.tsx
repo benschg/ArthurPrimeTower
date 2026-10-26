@@ -1,14 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Photo } from "@/data/types";
 import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
+import { useDialogKeys } from "@/lib/useDialogKeys";
 
+const titleOf = (p: Photo, lang: Lang) => (lang === "de" && p.titleDe ? p.titleDe : p.title);
+
+/** The photos as a masonry grid; a click opens one large. */
 export function Gallery({ photos, lang }: { photos: Photo[]; lang: Lang }) {
-  const t = ui[lang].sections.gallery;
-  const title = (p: Photo) => (lang === "de" && p.titleDe ? p.titleDe : p.title);
+  const title = (p: Photo) => titleOf(p, lang);
   const [open, setOpen] = useState<number | null>(null);
 
   const close = useCallback(() => setOpen(null), []);
@@ -16,21 +19,6 @@ export function Gallery({ photos, lang }: { photos: Photo[]; lang: Lang }) {
     (d: number) => setOpen((i) => (i === null ? null : (i + d + photos.length) % photos.length)),
     [photos.length],
   );
-
-  useEffect(() => {
-    if (open === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-      if (e.key === "ArrowRight") step(1);
-      if (e.key === "ArrowLeft") step(-1);
-    };
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open, close, step]);
 
   return (
     <>
@@ -59,41 +47,54 @@ export function Gallery({ photos, lang }: { photos: Photo[]; lang: Lang }) {
         ))}
       </div>
 
-      {open !== null && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-ink/95 flex flex-col items-center justify-center p-4" onClick={close}>
-          <div className="relative max-w-6xl w-full" onClick={(e) => e.stopPropagation()}>
-            <Image
-              src={`/photos/${photos[open].file}`}
-              alt={title(photos[open])}
-              width={photos[open].width ?? 1600}
-              height={photos[open].height ?? 1067}
-              sizes="100vw"
-              priority
-              className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
-            />
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-              <div>
-                <p className="font-medium">{title(photos[open])}</p>
-                <p className="text-muted text-xs">
-                  {t.photo}: {photos[open].author} ·{" "}
-                  <a className="underline hover:text-accent" href={photos[open].licenseUrl} target="_blank" rel="noreferrer">
-                    {photos[open].license}
-                  </a>{" "}
-                  ·{" "}
-                  <a className="underline hover:text-accent" href={photos[open].source} target="_blank" rel="noreferrer">
-                    {t.source}
-                  </a>
-                </p>
-              </div>
-              <div className="flex gap-2 font-mono text-xs">
-                <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={() => step(-1)}>{t.prev}</button>
-                <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={() => step(1)}>{t.next}</button>
-                <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={close}>{t.close}</button>
-              </div>
-            </div>
+      {open !== null && <Lightbox photo={photos[open]} lang={lang} onClose={close} onStep={step} />}
+    </>
+  );
+}
+
+/** One photo large, with its credits; Esc and the arrows work as the buttons do. */
+function Lightbox({ photo, lang, onClose, onStep }: { photo: Photo; lang: Lang; onClose: () => void; onStep: (d: number) => void }) {
+  const t = ui[lang].sections.gallery;
+  useDialogKeys(onClose, onStep);
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-ink/95 flex flex-col items-center justify-center p-4" onClick={onClose}>
+      <div className="relative max-w-6xl w-full" onClick={(e) => e.stopPropagation()}>
+        <Image
+          src={`/photos/${photo.file}`}
+          alt={titleOf(photo, lang)}
+          width={photo.width ?? 1600}
+          height={photo.height ?? 1067}
+          sizes="100vw"
+          priority
+          className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+        />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div>
+            <p className="font-medium">{titleOf(photo, lang)}</p>
+            <p className="text-muted text-xs">
+              {t.photo}: {photo.author} ·{" "}
+              <a className="underline hover:text-accent" href={photo.licenseUrl} target="_blank" rel="noreferrer">
+                {photo.license}
+              </a>{" "}
+              ·{" "}
+              <a className="underline hover:text-accent" href={photo.source} target="_blank" rel="noreferrer">
+                {t.source}
+              </a>
+            </p>
+          </div>
+          <div className="flex gap-2 font-mono text-xs">
+            <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={() => onStep(-1)}>
+              {t.prev}
+            </button>
+            <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={() => onStep(1)}>
+              {t.next}
+            </button>
+            <button className="glass px-3 py-1.5 rounded-md hover:text-accent" onClick={onClose}>
+              {t.close}
+            </button>
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }

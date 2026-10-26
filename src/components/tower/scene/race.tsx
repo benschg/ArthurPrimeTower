@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { bridgePoint } from "../geometry";
 import { DECK_TOP, LANE_Z, LOOP } from "../crossing/road";
+import { useGameActive } from "../gameStore";
 import { CAR_LEN, CAR_WIDTH, FINISH, START } from "../race/game";
-import { race, useRaceActive } from "../race/store";
-import { lampGeometry, part } from "./traffic";
+import { race } from "../race/store";
+import { canvasTexture } from "./helpers";
+import { GLASS, lampGeometry, part, parts } from "./parts";
 
 /** The player's car first, then the rivals'. */
 const COLORS = ["#e0262a", "#f2c14e", "#4f8fd6", "#a78bfa"];
@@ -32,33 +33,29 @@ export function raceView(portrait: boolean): { target: [number, number, number];
 
 /** A low coupé with a wing; white where the racer's colour goes. */
 function raceCar(): THREE.BufferGeometry {
-  return mergeGeometries([
+  return parts([
     part([3.6, 0.42, 1.76], [0, 0.22, 0], "#0c0f13"), // wheels, as a dark skirt
     part([CAR_LEN, 0.42, CAR_WIDTH], [0, 0.56, 0], "#ffffff"),
-    part([1.6, 0.38, 1.42], [-0.3, 0.95, 0], "#12171d"),
+    part([1.6, 0.38, 1.42], [-0.3, 0.95, 0], GLASS),
     part([1.35, 0.05, 1.3], [-0.3, 1.16, 0], "#ffffff"), // roof
     part([0.12, 0.36, 0.12], [-1.9, 0.94, 0.62], "#0c0f13"),
     part([0.12, 0.36, 0.12], [-1.9, 0.94, -0.62], "#0c0f13"),
     part([0.55, 0.07, 1.9], [-1.95, 1.15, 0], "#ffffff"), // wing
-  ])!;
+  ]);
 }
 
 /** Black and white squares, for the lines across the road and the beam over the finish. */
 function useChecker() {
   return useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = 96;
-    c.height = 16;
-    const ctx = c.getContext("2d")!;
-    for (let i = 0; i < 12; i++) {
-      for (let j = 0; j < 2; j++) {
-        ctx.fillStyle = (i + j) % 2 ? "#f4f6f8" : "#10151b";
-        ctx.fillRect(i * 8, j * 8, 8, 8);
+    const tex = canvasTexture(96, 16, (ctx) => {
+      for (let i = 0; i < 12; i++) {
+        for (let j = 0; j < 2; j++) {
+          ctx.fillStyle = (i + j) % 2 ? "#f4f6f8" : "#10151b";
+          ctx.fillRect(i * 8, j * 8, 8, 8);
+        }
       }
-    }
-    const tex = new THREE.CanvasTexture(c);
+    });
     tex.magFilter = THREE.NearestFilter;
-    tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }, []);
 }
@@ -68,7 +65,7 @@ function useChecker() {
  * A child of the bridge's group; the race itself is stepped with the traffic (see BridgeTraffic).
  */
 export function RaceCars() {
-  const active = useRaceActive();
+  const active = useGameActive(race);
   const car = useMemo(() => raceCar(), []);
   const lamps = useMemo(() => lampGeometry(), []);
   const checker = useChecker();

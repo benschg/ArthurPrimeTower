@@ -1,96 +1,75 @@
 import * as THREE from "three";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-
-export const DAY_FOG = new THREE.Color("#1a2230");
-
-export const NIGHT_FOG = new THREE.Color("#070a10");
-
-export const DAY_SUN = new THREE.Color("#fff3dd");
-
-export const NIGHT_SUN = new THREE.Color("#9fb4d6");
-
-export const DAY_GROUND = new THREE.Color("#161d27");
-
-export const NIGHT_GROUND = new THREE.Color("#0d131a");
+import { useHdri } from "./hdri";
+import { Stars, useNightDome } from "./nightSky";
+import { DAY_FOG, DAY_SUN, NIGHT_FOG, NIGHT_SUN } from "./palette";
+import { useStage } from "./stage";
 
 /**
- * Drives the day/night and garage fades imperatively every frame (no React re-renders):
- * lights, fog, sky intensities, ground opacity and garage opacities. React is only told
- * when the sky HDRI should swap (midpoint of the fade) and when the garage should mount.
+ * Light, fog and sky, and the day/night fade they go through together. The fade runs every
+ * frame without React: it eases the stage's night blend (which the stars, the ground and the
+ * traffic follow) and from it sets the lights, the fog and the scene's background and
+ * environment. The sky swaps at the midpoint of the fade, dipping through dark to hide the cut.
  */
-export function Blender({
-  night,
-  garageOpen,
-  onSkyNight,
-  onGarageMounted,
-}: {
-  night: boolean;
-  garageOpen: boolean;
-  onSkyNight: (v: boolean) => void;
-  onGarageMounted: (v: boolean) => void;
-}) {
-  const state = useRef({ night: night ? 1 : 0, garage: 0, skyNight: night, mounted: false });
-  const tmp = useRef(new THREE.Color());
+export const Atmosphere = memo(function Atmosphere({ night }: { night: boolean }) {
+  const { blendRef } = useStage();
+  const hdri = useHdri();
+  const dome = useNightDome();
+  const fog = useRef<THREE.Fog>(null);
+  const ambient = useRef<THREE.AmbientLight>(null);
+  const sun = useRef<THREE.DirectionalLight>(null);
+  const fill = useRef<THREE.DirectionalLight>(null);
 
   useFrame(({ scene }, dt) => {
-    const st = state.current;
-    const refs = {
-      ambient: scene.getObjectByName("ambient") as THREE.AmbientLight | undefined,
-      sun: scene.getObjectByName("sun") as THREE.DirectionalLight | undefined,
-      fill: scene.getObjectByName("fill") as THREE.DirectionalLight | undefined,
-      fog: scene.fog as THREE.Fog | null,
-      ground: (scene.getObjectByName("ground") as THREE.Mesh | undefined)?.material as THREE.MeshStandardMaterial | undefined,
-      garage: scene.getObjectByName("garage") as THREE.Group | undefined,
-    };
-    st.night = THREE.MathUtils.damp(st.night, night ? 1 : 0, 2.2, dt);
-    st.garage = THREE.MathUtils.damp(st.garage, garageOpen ? 1 : 0, 4, dt);
-    if (Math.abs(st.night - (night ? 1 : 0)) < 0.004) st.night = night ? 1 : 0;
-    if (Math.abs(st.garage - (garageOpen ? 1 : 0)) < 0.004) st.garage = garageOpen ? 1 : 0;
-    const nt = st.night;
-    const gt = st.garage;
-    scene.userData.nightBlend = nt;
+    const b = blendRef.current;
+    const want = night ? 1 : 0;
+    b.night = THREE.MathUtils.damp(b.night, want, 2.2, dt);
+    if (Math.abs(b.night - want) < 0.004) b.night = want;
+    const nt = b.night;
 
-    // lights and fog
-    if (refs.ambient) refs.ambient.intensity = THREE.MathUtils.lerp(0.5, 0.22, nt);
-    if (refs.sun) {
-      refs.sun.intensity = THREE.MathUtils.lerp(2.4, 0.45, nt);
-      refs.sun.color.copy(DAY_SUN).lerp(NIGHT_SUN, nt);
+    if (ambient.current) ambient.current.intensity = THREE.MathUtils.lerp(0.5, 0.22, nt);
+    if (sun.current) {
+      sun.current.intensity = THREE.MathUtils.lerp(2.4, 0.45, nt);
+      sun.current.color.copy(DAY_SUN).lerp(NIGHT_SUN, nt);
     }
-    if (refs.fill) refs.fill.intensity = THREE.MathUtils.lerp(0.6, 0.2, nt);
-    if (refs.fog) refs.fog.color.copy(DAY_FOG).lerp(NIGHT_FOG, nt);
+    if (fill.current) fill.current.intensity = THREE.MathUtils.lerp(0.6, 0.2, nt);
+    fog.current?.color.copy(DAY_FOG).lerp(NIGHT_FOG, nt);
 
-    // sky: swap the HDRI at the midpoint, dipping through dark to hide the cut.
-    // The night backdrop is the starry dome (see Sky), authored at its final brightness.
+    // By night the backdrop is the starry dome (see Stars), authored at its final brightness,
+    // while the night HDRI lights the scene and shows in the glass (the day one until it has loaded).
     const skyNight = nt >= 0.5;
-    if (skyNight !== st.skyNight) {
-      st.skyNight = skyNight;
-      onSkyNight(skyNight);
-    }
+    const background = skyNight ? dome : hdri.day;
+    if (scene.background !== background) scene.background = background;
+    const environment = skyNight && hdri.night ? hdri.night : hdri.day;
+    if (scene.environment !== environment) scene.environment = environment;
     const dip = 1 - Math.min(1, Math.abs(nt - 0.5) * 2);
     scene.backgroundIntensity = (skyNight ? 1 : 0.55) * (1 - dip * 0.9);
     scene.environmentIntensity = (skyNight ? 0.5 : 0.8) * (1 - dip * 0.6);
     scene.backgroundBlurriness = skyNight ? 0 : 0.02;
-
-    // ground and garage
-    const ground = refs.ground;
-    if (ground) {
-      ground.opacity = THREE.MathUtils.lerp(1, 0.12, gt);
-      ground.color.copy(tmp.current.copy(DAY_GROUND).lerp(NIGHT_GROUND, nt));
-    }
-    const mounted = gt > 0.001;
-    if (mounted !== st.mounted) {
-      st.mounted = mounted;
-      onGarageMounted(mounted);
-    }
-    const g = refs.garage;
-    if (g) {
-      g.traverse((o) => {
-        const m = (o as THREE.Mesh).material as THREE.Material | undefined;
-        if (m && m.userData.baseOpacity !== undefined) m.opacity = m.userData.baseOpacity * gt;
-      });
-      for (const el of document.querySelectorAll<HTMLElement>(".garage-label")) el.style.opacity = String(gt);
-    }
   });
-  return null;
-}
+
+  return (
+    <>
+      <fog ref={fog} attach="fog" args={["#1a2230", 420, 1100]} />
+      <ambientLight ref={ambient} intensity={0.5} />
+      <directionalLight
+        ref={sun}
+        position={[-140, 220, 120]}
+        intensity={2.4}
+        color="#fff3dd"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-260}
+        shadow-camera-right={260}
+        shadow-camera-top={260}
+        shadow-camera-bottom={-260}
+        shadow-camera-near={10}
+        shadow-camera-far={700}
+        shadow-bias={-0.0004}
+      />
+      <directionalLight ref={fill} position={[160, 90, -140]} intensity={0.6} color="#8fc9ff" />
+      <Stars />
+    </>
+  );
+});

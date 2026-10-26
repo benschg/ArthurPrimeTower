@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { entrances } from "../entrances";
 
 /** Ground-floor entrances: frames, glass leaves and the canopy over the main entrance. */
-export function Entrances() {
+export const Entrances = memo(function Entrances() {
   const list = useMemo(() => entrances(), []);
   return (
     <group>
@@ -69,4 +69,4 @@ export function Entrances() {
       })}
     </group>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { TYP_HEIGHT, floorElevation, EDGE_NE, EDGE_SE, EDGE_W, growPolygon, stages, type Pt } from "./footprint";
+import { growPolygon, type Pt } from "./footprint";
 
 // Drawing frame (letting plan) → north-up frame. Drawing +x = bearing 32.7°, +y = bearing 122.7°.
 export const DA = (32.7 * Math.PI) / 180;
@@ -36,36 +36,6 @@ export function perimeterColumns(poly: Pt[], spacing = 5.65, inset = 1.0): Pt[] 
     for (let k = 0; k < count; k++) {
       const t = (k + 0.5) / count;
       out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-    }
-  }
-  return out;
-}
-
-export type Strut = { from: [number, number, number]; to: [number, number, number] };
-
-/** Inclined facade columns carrying each cantilever over three storeys. */
-export function struts(): Strut[] {
-  const out: Strut[] = [];
-  const pushes: { stage: number; edge: number }[] = [
-    { stage: 2, edge: EDGE_NE },
-    { stage: 3, edge: EDGE_SE },
-    { stage: 4, edge: EDGE_W },
-  ];
-  for (const { stage, edge } of pushes) {
-    const prev = stages[stage - 1].polygon;
-    const cur = stages[stage].polygon;
-    const yTop = floorElevation(stages[stage].from);
-    const yBot = yTop - 3 * TYP_HEIGHT;
-    const a0 = prev[edge];
-    const b0 = prev[(edge + 1) % prev.length];
-    const a1 = cur[edge];
-    const b1 = cur[(edge + 1) % cur.length];
-    const n = 4;
-    for (let k = 0; k < n; k++) {
-      const t = (k + 0.5) / n;
-      const p0: Pt = [a0[0] + (b0[0] - a0[0]) * t, a0[1] + (b0[1] - a0[1]) * t];
-      const p1: Pt = [a1[0] + (b1[0] - a1[0]) * t, a1[1] + (b1[1] - a1[1]) * t];
-      out.push({ from: [p0[0], yBot, p0[1]], to: [p1[0], yTop, p1[1]] });
     }
   }
   return out;

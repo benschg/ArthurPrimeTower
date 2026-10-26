@@ -1,41 +1,29 @@
-import { createFacadeMaterial, cubeUVDefines } from "../facadeShader";
-import { blinds } from "../blinds";
-import { windows } from "../windows";
-import { facadeLife } from "../facadeLife";
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { memo, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import type { FacadeMaterial } from "../facadeShader";
-import type { ExtractState } from "../Interiors";
+import { blinds } from "../blinds";
+import { facadeLife } from "../facadeLife";
 import { FLOORS, floorHeight, floorElevation, stageForFloor } from "../geometry";
-import { liftAbove, extrudeUp, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
-import type { UnitProps } from "./types";
-import { MaintenanceUnit } from "./maintenance";
-import { Roof } from "./roof";
-import { DAY_GROUND, NIGHT_GROUND } from "./blender";
+import { windows } from "../windows";
+import { createFacadeMaterial, cubeUVDefines, syncPaneTextures, type FacadeMaterial } from "./facadeShader";
+import { useGlassEnvs } from "./hdri";
+import { extrudeUp } from "./helpers";
+import { DAY_GROUND, NIGHT_GROUND } from "./palette";
+import { bulgeLift, bulgeScale, liftAbove, useStage } from "./stage";
 
-export function GlassStages({
+/** The glass facade: one ring per floor, so the stack can open and explode, all in the one facade material. */
+export const GlassStages = memo(function GlassStages({
   night,
   dim,
   lively,
-  env,
-  unit,
-  explodeRef,
-  extractRef,
-  outgoingRef,
 }: {
   night: boolean;
   dim: boolean;
   /** windows and blinds change by themselves now and then (off while a game owns the facade) */
   lively: boolean;
-  env: THREE.Texture;
-  unit: UnitProps;
-  explodeRef: RefObject<ExplodeState>;
-  extractRef: RefObject<ExtractState>;
-  outgoingRef: RefObject<ExtractState>;
 }) {
-  const roofRef = useRef<THREE.Group>(null);
-  const ringsRef = useRef<THREE.Group>(null);
+  const { explodeRef, extractRef, outgoingRef, blendRef, glassRef: ringsRef } = useStage();
+  const envs = useGlassEnvs();
   // A pulled-out floor's ring fades away so the plate does not clip through it. Faded rings
   // get their own material clone (uniforms synced from the shared one each frame): a shared
   // material's uniforms are only re-uploaded when the material changes between draws, so a
@@ -44,9 +32,8 @@ export function GlassStages({
   // The shared material is reached through the first ring so it is mutated as a scene
   // object, not as a memoised value.
   const mat = () => (ringsRef.current?.children[0] as THREE.Mesh | undefined)?.material as FacadeMaterial | undefined;
-  // One shared facade material; one glass ring per floor so the stack can open and explode.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- env swaps via the uniform below
-  const material = useMemo(() => createFacadeMaterial(env), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the sky swaps through the uniform below
+  const material = useMemo(() => createFacadeMaterial(envs.day), []);
   const rings = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
@@ -65,29 +52,29 @@ export function GlassStages({
     [],
   );
 
-  useEffect(() => {
-    const m = mat();
-    if (!m) return;
-    m.uniforms.uEnv.value = env;
-    // day and night HDRIs differ in resolution: the cube-UV sampling constants follow the texture
-    const defines = cubeUVDefines(env);
-    if (defines.CUBEUV_TEXEL_HEIGHT !== m.defines.CUBEUV_TEXEL_HEIGHT) {
-      m.defines = defines;
-      m.needsUpdate = true;
-    }
-  }, [env]);
-
   useFrame((_, dt) => {
     if (lively) facadeLife.update(dt);
     blinds.update(dt);
     windows.update(dt);
-    const gap = explodeRef.current?.gap ?? 0;
-    const ex = extractRef.current;
-    const prev = outgoingRef.current;
-    if (!ex || !prev) return;
-    if (roofRef.current) roofRef.current.position.y = (FLOORS - 1) * gap + liftAbove(FLOORS, ex, prev);
+    syncPaneTextures();
     const m = mat();
     if (!m) return;
+    const xs = explodeRef.current;
+    const ex = extractRef.current;
+    const prev = outgoingRef.current;
+
+    // the sky in the glass swaps with the backdrop, at the midpoint of the day/night fade
+    const env = blendRef.current.night >= 0.5 && envs.night ? envs.night : envs.day;
+    if (m.uniforms.uEnv.value !== env) {
+      m.uniforms.uEnv.value = env;
+      // day and night HDRIs differ in resolution: the cube-UV sampling constants follow the texture
+      const defines = cubeUVDefines(env);
+      if (defines.CUBEUV_TEXEL_HEIGHT !== m.defines.CUBEUV_TEXEL_HEIGHT) {
+        m.defines = defines;
+        m.needsUpdate = true;
+      }
+    }
+
     if (!fadeMats.current) {
       // Built from the factory rather than m.clone(): cloning a material copies its uniforms,
       // and uEnv holds a PMREM render-target texture, which cloneUniforms cannot copy (it warns
@@ -113,26 +100,23 @@ export function GlassStages({
       }
     };
     const fadeOf = (t: number) => 1 - THREE.MathUtils.smoothstep(t, 0, 0.35);
-    if (ringsRef.current) {
-      ringsRef.current.children.forEach((child, f) => {
-        const ring = child as THREE.Mesh;
-        const xs = explodeRef.current;
-        ring.position.y = floorElevation(f) + f * gap + liftAbove(f, ex, prev) + (xs ? bulgeLift(f, xs) : 0);
-        const bs = xs ? bulgeScale(f, xs) : 1;
-        ring.scale.set(bs, 1, bs);
-        const slot = f === ex.floor ? 0 : f === prev.floor ? 1 : -1;
-        const fade = slot === 0 ? fadeOf(ex.t) : slot === 1 ? fadeOf(prev.t) : 1;
-        if (slot >= 0 && fade < 0.999) {
-          const c = fadeMats.current![slot];
-          syncClone(c, fade);
-          if (ring.material !== c) ring.material = c;
-        } else if (ring.material !== m) {
-          ring.material = m;
-        }
-      });
-    }
+    ringsRef.current?.children.forEach((child, f) => {
+      const ring = child as THREE.Mesh;
+      ring.position.y = floorElevation(f) + f * xs.gap + liftAbove(f, ex, prev) + bulgeLift(f, xs);
+      const bs = bulgeScale(f, xs);
+      ring.scale.set(bs, 1, bs);
+      const slot = f === ex.floor ? 0 : f === prev.floor ? 1 : -1;
+      const fade = slot === 0 ? fadeOf(ex.t) : slot === 1 ? fadeOf(prev.t) : 1;
+      if (slot >= 0 && fade < 0.999) {
+        const c = fadeMats.current![slot];
+        syncClone(c, fade);
+        if (ring.material !== c) ring.material = c;
+      } else if (ring.material !== m) {
+        ring.material = m;
+      }
+    });
     const u = m.uniforms;
-    u.uBlindColor.value.copy(blinds.tint);
+    u.uBlindColor.value.setRGB(...blinds.tint);
     u.uBlindGlow.value = blinds.glow;
     u.uNight.value = THREE.MathUtils.damp(u.uNight.value, night ? 1 : 0, 3, dt);
     u.uOpacity.value = THREE.MathUtils.damp(u.uOpacity.value, dim ? 0.14 : 1, 6, dt);
@@ -143,17 +127,10 @@ export function GlassStages({
   });
 
   return (
-    <group>
-      <group ref={ringsRef}>
-        {rings.map((g, f) => (
-          <mesh key={f} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
-        ))}
-      </group>
-      {/* the roof and the cradle ride up with the exploded stack */}
-      <group ref={roofRef}>
-        <Roof night={night} party={unit.cleaning.active && unit.cleaning.progress >= 0.99} />
-        <MaintenanceUnit {...unit} />
-      </group>
+    <group ref={ringsRef}>
+      {rings.map((g, f) => (
+        <mesh key={f} geometry={g} material={material} position={[0, floorElevation(f), 0]} castShadow receiveShadow />
+      ))}
     </group>
   );
-}
+});

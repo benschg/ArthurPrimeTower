@@ -1,40 +1,39 @@
 import * as THREE from "three";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
-import { TOWER_HEIGHT, growPolygon, stages, DRAWING_ROT_Y } from "../geometry";
+import { FLOORS, TOWER_HEIGHT, growPolygon, stages, DRAWING_ROT_Y } from "../geometry";
 import { shapeFrom } from "./helpers";
+import { liftAbove, useStage } from "./stage";
 import { useGlowTexture, useLouvreTexture } from "./textures";
 
-export function AviationLight({ position, night, glow, mast = 2, party = false }: { position: [number, number, number]; night: boolean; glow: THREE.Texture; mast?: number; party?: boolean }) {
-  const sprite = useRef<THREE.Sprite>(null);
-  const lamp = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    const pulse = party ? 0.6 + 0.6 * Math.max(0, Math.sin(t * 9 + position[0] * 0.7)) : 0.85 + 0.15 * Math.sin(t * 2.2 + position[0]);
-    const base = (night ? 9 : 3.2) * (party ? 1.6 : 1);
-    if (sprite.current) sprite.current.scale.setScalar(base * pulse);
-    const m = lamp.current?.material as THREE.MeshStandardMaterial | undefined;
-    if (m) m.emissiveIntensity = (night ? 6 : 2.5) * pulse;
-  });
+type Light = { position: [number, number, number]; mast: number };
+
+/** A red aviation light on a short mast; Roof makes it pulse. */
+function AviationLight({ position, mast, glow }: Light & { glow: THREE.Texture }) {
   return (
     <group position={position}>
       <mesh position={[0, mast / 2, 0]}>
         <cylinderGeometry args={[0.08, 0.1, mast, 6]} />
         <meshStandardMaterial color="#8b949e" />
       </mesh>
-      <mesh ref={lamp} position={[0, mast + 0.25, 0]}>
+      <mesh position={[0, mast + 0.25, 0]}>
         <sphereGeometry args={[0.32, 12, 12]} />
         <meshStandardMaterial color="#ff2a1a" emissive="#ff3020" emissiveIntensity={3} toneMapped={false} />
       </mesh>
-      <sprite ref={sprite} position={[0, mast + 0.25, 0]} scale={4}>
+      <sprite position={[0, mast + 0.25, 0]} scale={4}>
         <spriteMaterial map={glow} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </sprite>
     </group>
   );
 }
 
-/** Parapet, plant enclosure, mast and the ring of red aviation lights seen in photos. */
-export function Roof({ night, party }: { night: boolean; party: boolean }) {
+/**
+ * Parapet, plant enclosure, mast and the ring of red aviation lights seen in photos. It rides
+ * up with the top floor when the stack explodes or opens, and carries what stands on it.
+ * `party`: the lights flash for a won game.
+ */
+export function Roof({ night, party, children }: { night: boolean; party: boolean; children?: ReactNode }) {
+  const { explodeRef, extractRef, outgoingRef } = useStage();
   const top = stages[stages.length - 1].polygon;
   const glow = useGlowTexture();
   const louvre = useLouvreTexture();
@@ -47,10 +46,36 @@ export function Roof({ night, party }: { night: boolean; party: boolean }) {
     g.rotateX(-Math.PI / 2);
     return g;
   }, [top]);
-  // One light near each roof corner, inset from the parapet; the two reflex corners are skipped.
-  const lights = useMemo(() => growPolygon(top, -1.6).filter((_, i) => i !== 1 && i !== 5), [top]);
+  // Main mast with lights at the tip and mid-height; one near each roof corner, inset from the
+  // parapet, skipping the two reflex corners.
+  const lights = useMemo<Light[]>(
+    () => [
+      { position: [-4, TOWER_HEIGHT + 3.2 + 7.2, 2], mast: 0.6 },
+      { position: [-4, TOWER_HEIGHT + 3.2 + 3.6, 2], mast: 0.2 },
+      ...growPolygon(top, -1.6)
+        .filter((_, i) => i !== 1 && i !== 5)
+        .map(([e, n]): Light => ({ position: [e, TOWER_HEIGHT + 1.0, -n], mast: 2 })),
+    ],
+    [top],
+  );
+  const group = useRef<THREE.Group>(null);
+  const lamps = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    const g = group.current;
+    if (g) g.position.y = (FLOORS - 1) * explodeRef.current.gap + liftAbove(FLOORS, extractRef.current, outgoingRef.current);
+    const t = clock.elapsedTime;
+    lamps.current?.children.forEach((light, i) => {
+      const x = lights[i].position[0];
+      const pulse = party ? 0.6 + 0.6 * Math.max(0, Math.sin(t * 9 + x * 0.7)) : 0.85 + 0.15 * Math.sin(t * 2.2 + x);
+      const [, lamp, sprite] = light.children as [THREE.Mesh, THREE.Mesh, THREE.Sprite];
+      sprite.scale.setScalar((night ? 9 : 3.2) * (party ? 1.6 : 1) * pulse);
+      (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity = (night ? 6 : 2.5) * pulse;
+    });
+  });
+
   return (
-    <group>
+    <group ref={group}>
       <mesh geometry={parapet} position={[0, TOWER_HEIGHT - 0.1, 0]} castShadow>
         <meshStandardMaterial color="#141a21" roughness={0.85} metalness={0.2} />
       </mesh>
@@ -71,16 +96,16 @@ export function Roof({ night, party }: { night: boolean; party: boolean }) {
           </mesh>
         ))}
       </group>
-      {/* Main mast with lights at the tip and mid-height */}
       <mesh position={[-4, TOWER_HEIGHT + 3.2 + 3.6, 2]}>
         <cylinderGeometry args={[0.1, 0.24, 7.2, 8]} />
         <meshStandardMaterial color="#d7dee6" metalness={0.4} roughness={0.4} />
       </mesh>
-      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 7.2, 2]} night={night} glow={glow} mast={0.6} party={party} />
-      <AviationLight position={[-4, TOWER_HEIGHT + 3.2 + 3.6, 2]} night={night} glow={glow} mast={0.2} party={party} />
-      {lights.map(([e, n], i) => (
-        <AviationLight key={i} position={[e, TOWER_HEIGHT + 1.0, -n]} night={night} glow={glow} party={party} />
-      ))}
+      <group ref={lamps}>
+        {lights.map((l, i) => (
+          <AviationLight key={i} {...l} glow={glow} />
+        ))}
+      </group>
+      {children}
     </group>
   );
 }

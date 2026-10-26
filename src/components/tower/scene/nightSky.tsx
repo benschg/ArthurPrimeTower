@@ -1,40 +1,38 @@
 import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { NIGHT_FOG } from "./blender";
+import { mulberry32, smoothstep } from "../math";
+import { canvasTexture, noRaycast } from "./helpers";
+import { NIGHT_FOG } from "./palette";
+import { useStage } from "./stage";
 
 /** Far enough to sit behind the whole site, inside the camera's far plane (2500). */
 const STAR_RADIUS = 2000;
 
 /**
- * The backdrop: by day the day HDRI itself; by night a dark dome with stars, while the
- * night HDRI stays the environment and the glass keeps reflecting the city lights in it.
- * `night` is the swapped sky (the midpoint of the fade); the stars fade in with
- * `scene.userData.nightBlend`, which Blender writes every frame.
+ * The stars of the night sky, fading in over the second half of the day-to-night blend. They
+ * sit on a sphere around the camera, so they turn with it but never come closer.
  */
-export function Sky({ night, hdri }: { night: boolean; hdri: THREE.Texture }) {
-  const dome = useMemo(() => nightDome(), []);
+export function Stars() {
+  const { blendRef } = useStage();
   const stars = useMemo(() => starField(), []);
   const ref = useRef<THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>>(null);
   useEffect(
     () => () => {
-      dome.dispose();
       stars.geometry.dispose();
       stars.material.dispose();
     },
-    [dome, stars],
+    [stars],
   );
 
-  useFrame(({ scene, camera, clock, gl }) => {
-    const backdrop = night ? dome : hdri;
-    if (scene.background !== backdrop) scene.background = backdrop;
+  useFrame(({ camera, clock, gl }) => {
     const pts = ref.current;
     if (!pts) return;
     // stars are at infinity: they travel with the camera and only turn with it
     pts.position.copy(camera.position);
-    const nt = (scene.userData.nightBlend as number | undefined) ?? (night ? 1 : 0);
-    const fade = THREE.MathUtils.smoothstep(nt, 0.5, 1);
+    const fade = smoothstep(blendRef.current.night, 0.5, 1);
     pts.visible = fade > 0;
+    if (!pts.visible) return;
     const u = pts.material.uniforms;
     u.uFade.value = fade;
     u.uTime.value = clock.elapsedTime;
@@ -43,43 +41,36 @@ export function Sky({ night, hdri }: { night: boolean; hdri: THREE.Texture }) {
   return <primitive ref={ref} object={stars} />;
 }
 
-/** Night dome, zenith to below the horizon: deep blue-black, lightening into the city's glow, then the fog. */
-function nightDome() {
-  const c = document.createElement("canvas");
-  c.width = 4;
-  c.height = 512;
-  const ctx = c.getContext("2d")!;
-  // equirect rows: 0 is the zenith, 0.5 the horizon, 1 the nadir
-  const g = ctx.createLinearGradient(0, 0, 0, c.height);
-  g.addColorStop(0, "#02040b");
-  g.addColorStop(0.2, "#040914");
-  g.addColorStop(0.36, "#08101f");
-  g.addColorStop(0.45, "#141a2b");
-  g.addColorStop(0.49, "#2a2533");
-  g.addColorStop(0.5, "#2c2632");
-  g.addColorStop(0.52, `#${NIGHT_FOG.getHexString()}`);
-  g.addColorStop(1, `#${NIGHT_FOG.getHexString()}`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, c.width, c.height);
-  const tex = new THREE.CanvasTexture(c);
-  tex.mapping = THREE.EquirectangularReflectionMapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+/** The backdrop by night: a dark dome while the night HDRI stays the environment, so the glass keeps reflecting the city lights in it. */
+export function useNightDome(): THREE.Texture {
+  const dome = useMemo(() => nightDome(), []);
+  useEffect(() => () => dome.dispose(), [dome]);
+  return dome;
 }
 
-/** Deterministic, so the same stars come back on every visit. */
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+/** Night dome, zenith to below the horizon: deep blue-black, lightening into the city's glow, then the fog. */
+function nightDome() {
+  const tex = canvasTexture(4, 512, (ctx, w, h) => {
+    // equirect rows: 0 is the zenith, 0.5 the horizon, 1 the nadir
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, "#02040b");
+    g.addColorStop(0.2, "#040914");
+    g.addColorStop(0.36, "#08101f");
+    g.addColorStop(0.45, "#141a2b");
+    g.addColorStop(0.49, "#2a2533");
+    g.addColorStop(0.5, "#2c2632");
+    g.addColorStop(0.52, `#${NIGHT_FOG.getHexString()}`);
+    g.addColorStop(1, `#${NIGHT_FOG.getHexString()}`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  return tex;
 }
 
 const STAR_TINTS = [new THREE.Color("#a9c1ff"), new THREE.Color("#ffffff"), new THREE.Color("#fff1d6"), new THREE.Color("#ffd2a1")];
 
+/** Deterministic, so the same stars come back on every visit. */
 function starField() {
   const rand = mulberry32(201);
   const gauss = () => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
@@ -96,7 +87,7 @@ function starField() {
     if (dir.y < -0.02) return;
     const b = faint ? rand() ** 3 * 0.45 : rand() ** 5;
     // extinction and city glow wash out the stars near the horizon
-    const horizon = THREE.MathUtils.smoothstep(dir.y, -0.02, 0.35);
+    const horizon = smoothstep(dir.y, -0.02, 0.35);
     const alpha = (0.55 + 0.45 * b) * (0.15 + 0.85 * horizon);
     pos.push(dir.x * STAR_RADIUS, dir.y * STAR_RADIUS, dir.z * STAR_RADIUS);
     const tint = STAR_TINTS[Math.min(STAR_TINTS.length - 1, Math.floor(rand() ** 1.6 * STAR_TINTS.length))];
@@ -164,6 +155,7 @@ function starField() {
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
   points.renderOrder = -1;
-  points.name = "stars";
+  // 37,000 points: label occlusion and pointer tests would walk every one of them
+  points.raycast = noRaycast;
   return points;
 }

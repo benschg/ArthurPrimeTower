@@ -8,6 +8,7 @@
  */
 import { coreBoxesDrawing, growPolygon, pointInPolygon, stageForFloor, worldToDrawing, type Pt } from "../geometry";
 import { LIFT_SHAFTS } from "../interiorLayout";
+import { mulberry32 } from "../math";
 
 export const PAC_FLOOR = 13;
 /** Grid pitch in metres. */
@@ -52,18 +53,6 @@ export const idx = (m: { w: number }, x: number, y: number) => y * m.w + x;
 
 export function isLane(m: Maze, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < m.w && y < m.h && m.lane[y * m.w + x] === 1;
-}
-
-/** Small deterministic generator (mulberry32). */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 const STEPS: Cell[] = [
@@ -212,7 +201,7 @@ function carve(ox: number, oy: number, seed: number): Maze {
   };
 
   // Depth-first carving on the odd lattice: nodes two cells apart, the cell between is the door.
-  const rand = rng(seed);
+  const rand = mulberry32(seed);
   for (let sy = 1; sy < h; sy += 2) {
     for (let sx = 1; sx < w; sx += 2) {
       if (!isFree(sx, sy) || m.lane[idx(m, sx, sy)]) continue;

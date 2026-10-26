@@ -1,20 +1,19 @@
-import * as THREE from "three";
 import { edgeOutwardNormal, FLOORS, stageForFloor } from "./geometry";
-import { PANE_COLUMNS, PaneField, seededRandom } from "./paneField";
+import { seededRandom, smoothstep } from "./math";
+import { PaneField } from "./paneField";
 
-export { PANE_W } from "./paneField";
-/** Texture width in panes (see PaneField). */
-export const BLIND_PANES = PANE_COLUMNS;
+type RGB = [number, number, number];
+const DEFAULT_TINT: RGB = [0.5, 0.49, 0.46];
 
 /**
  * Window blinds, one value per pane per floor: 0 = raised, 1 = fully lowered. The facade shader
  * reads the field's texture at the pane it is shading (see PaneField for how panes are addressed).
  */
 export class Blinds extends PaneField {
-  /** Blind colour and glow as the shader sees them; eased toward the targets set by setStyle. */
-  readonly tint = new THREE.Color(0.5, 0.49, 0.46);
+  /** Blind colour (linear RGB 0..1) and glow as the shader sees them; eased toward the targets set by setStyle. */
+  readonly tint: RGB = [...DEFAULT_TINT];
   glow = 0;
-  private readonly tintTarget = new THREE.Color(0.5, 0.49, 0.46);
+  private readonly tintTarget: RGB = [...DEFAULT_TINT];
   private glowTarget = 0;
   /** Share of panes with a lowered blind, as last set by randomize(); stir() holds it. */
   private share = 0.28;
@@ -56,25 +55,25 @@ export class Blinds extends PaneField {
     return this.map((f, _k, edge) => {
       const n = edgeOutwardNormal(stageForFloor(f).polygon, edge);
       const facing = n[0] * sx + n[1] * sy;
-      return facing > 0 ? THREE.MathUtils.smoothstep(facing, 0.15, 0.9) * strength : 0;
+      return facing > 0 ? smoothstep(facing, 0.15, 0.9) * strength : 0;
     });
   }
 
   /** Colour (linear RGB 0..1) and self-glow of lowered blinds; eased like the blinds themselves. */
-  setStyle(color: [number, number, number], glow: number): this {
-    this.tintTarget.setRGB(color[0], color[1], color[2]);
+  setStyle(color: RGB, glow: number): this {
+    this.tintTarget.splice(0, 3, ...color);
     this.glowTarget = glow;
     return this;
   }
 
   resetStyle(): this {
-    return this.setStyle([0.5, 0.49, 0.46], 0);
+    return this.setStyle(DEFAULT_TINT, 0);
   }
 
   /** Ease the blinds and their style toward the targets; call once per frame. */
   override update(dt: number): boolean {
     const k = 1 - Math.exp(-this.speed * Math.max(dt, 0));
-    this.tint.lerp(this.tintTarget, k);
+    for (let i = 0; i < 3; i++) this.tint[i] += (this.tintTarget[i] - this.tint[i]) * k;
     this.glow += (this.glowTarget - this.glow) * k;
     return super.update(dt);
   }

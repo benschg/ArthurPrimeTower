@@ -1,23 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { slides, talkDownloads } from "@/data/presentation";
 import { pick } from "@/i18n";
 import { LangToggle, useLang } from "@/i18n/LangContext";
 import { ui } from "@/i18n/ui";
+import { useHash } from "@/lib/useHash";
 import { CANVAS_H, CANVAS_W, SlideView } from "./SlideView";
 
-/* The current slide lives in the URL hash (#1 … #8), read through an external store so it hydrates cleanly. */
-function slideFromHash() {
-  const n = parseInt(window.location.hash.replace("#", ""), 10);
+/* The current slide lives in the URL hash (#1 … #8). */
+function slideOf(hash: string) {
+  const n = parseInt(hash, 10);
   return Number.isFinite(n) && n >= 1 && n <= slides.length ? n - 1 : 0;
 }
-const subscribeHash = (cb: () => void) => {
-  window.addEventListener("hashchange", cb);
-  return () => window.removeEventListener("hashchange", cb);
-};
-const serverSlide = () => 0;
+const slideFromHash = () => slideOf(window.location.hash.slice(1));
 
 /**
  * The school-talk deck: a fixed 1920×1080 canvas scaled to fit the viewport.
@@ -27,7 +24,7 @@ const serverSlide = () => 0;
 export function SlideDeck() {
   const { lang } = useLang();
   const t = ui[lang].sections.talk;
-  const index = useSyncExternalStore(subscribeHash, slideFromHash, serverSlide);
+  const index = slideOf(useHash());
   const [notes, setNotes] = useState(false);
   const [scale, setScale] = useState(0.5);
   const stageRef = useRef<HTMLDivElement>(null);

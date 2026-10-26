@@ -4,7 +4,9 @@
  * types them and the next three come. Rounds get shorter and draw from a wider, more
  * confusable character set.
  */
-import { blinds, PANE_W } from "../blinds";
+import { bestScore } from "@/lib/storage";
+import { blinds } from "../blinds";
+import { PANE_W } from "../paneField";
 import { floorElevation, perimeterOffsets, stageForFloor, type Pt } from "../geometry";
 import { GLYPH_H, GLYPH_W, GLYPHS } from "./font5x7";
 
@@ -55,23 +57,8 @@ export type TypingState = {
 
 export type KeyEvent = "char" | "round" | "milestone" | "miss";
 
-const BEST_KEY = "prime-tower-typing-best";
-
-export function readBest(): number {
-  try {
-    return Number(window.localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writeBest(v: number) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(v));
-  } catch {
-    /* storage unavailable */
-  }
-}
+const bestStore = bestScore("prime-tower-typing-best");
+export const readBest = bestStore.read;
 
 export function idleTyping(best = 0): TypingState {
   return { active: false, over: false, round: 1, chars: "", typed: 0, score: 0, streak: 0, best, newBest: false, timeLeft: 0, timeTotal: 0, mistakes: 0, flash: 0, warmup: 0 };
@@ -133,7 +120,7 @@ export function tick(s: TypingState, dt: number): TypingState {
   if (timeLeft > 0) return { ...s, timeLeft };
   const newBest = s.score > s.best;
   const best = Math.max(s.best, s.score);
-  if (newBest) writeBest(best);
+  if (newBest) bestStore.write(best);
   return { ...s, timeLeft: 0, over: true, best, newBest };
 }
 

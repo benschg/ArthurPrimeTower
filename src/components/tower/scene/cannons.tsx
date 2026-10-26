@@ -1,10 +1,10 @@
 "use client";
 
 import * as THREE from "three";
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { edgeOutwardNormal, FLOORS, stageForFloor, TOWER_HEIGHT } from "../geometry";
-import { confettiCannons } from "../typing/cannons";
+import { edgeFrame, FLOORS, stageForFloor, TOWER_HEIGHT } from "../geometry";
+import { CONFETTI_COLORS, confettiCannons } from "../typing/cannons";
 import { SLOT_EDGES } from "../typing/game";
 
 const MAX = 720; // pieces, recycled round-robin
@@ -14,7 +14,7 @@ const DRAG = 1.25; // ... and strong drag, for a terminal speed of about 3.4 m/s
 const ELEVATION = (54 * Math.PI) / 180; // barrels point up and out over the facade
 const SCALE = 1.5; // cannon size
 const BARREL = 2.4;
-const COLORS = ["#7dd3c0", "#4f8fd6", "#f2c14e", "#e25c4a", "#a78bfa", "#ffffff"].map((c) => new THREE.Color(c));
+const COLORS = CONFETTI_COLORS.map((c) => new THREE.Color(c));
 const UP = new THREE.Vector3(0, 1, 0);
 
 type Mount = { pos: THREE.Vector3; dir: THREE.Vector3; side: THREE.Vector3; quat: THREE.Quaternion };
@@ -24,21 +24,16 @@ type Mount = { pos: THREE.Vector3; dir: THREE.Vector3; side: THREE.Vector3; quat
  * Shots queued by the game launch paper pieces that arc out over the facade and float down.
  * Pieces are one InstancedMesh simulated on the CPU (drag, flutter, tumble).
  */
-export function ConfettiCannons({ active }: { active: boolean }) {
+export const ConfettiCannons = memo(function ConfettiCannons({ active }: { active: boolean }) {
   const mounts = useMemo<Mount[]>(() => {
     const poly = stageForFloor(FLOORS - 1).polygon;
     return SLOT_EDGES.map((edge) => {
-      const a = poly[edge];
-      const b = poly[(edge + 1) % poly.length];
-      const out = edgeOutwardNormal(poly, edge);
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      const e = (a[0] + b[0]) / 2 - out[0] * 1.9;
-      const n = (a[1] + b[1]) / 2 - out[1] * 1.9;
+      const { mid, along, out } = edgeFrame(poly, edge);
       const dir = new THREE.Vector3(out[0] * Math.cos(ELEVATION), Math.sin(ELEVATION), -out[1] * Math.cos(ELEVATION)).normalize();
       return {
-        pos: new THREE.Vector3(e, TOWER_HEIGHT + 0.2, -n),
+        pos: new THREE.Vector3(mid[0] - out[0] * 1.9, TOWER_HEIGHT + 0.2, -(mid[1] - out[1] * 1.9)),
         dir,
-        side: new THREE.Vector3((b[0] - a[0]) / len, 0, -(b[1] - a[1]) / len),
+        side: new THREE.Vector3(along[0], 0, -along[1]),
         quat: new THREE.Quaternion().setFromUnitVectors(UP, dir),
       };
     });
@@ -159,6 +154,8 @@ export function ConfettiCannons({ active }: { active: boolean }) {
       live++;
     }
     if (dirty) m.instanceMatrix.needsUpdate = true;
+    // no draw call for 720 hidden pieces while nothing is in the air
+    m.visible = live > 0;
     confettiCannons.live = live;
 
     // cannons pop in for the game; barrels recoil and the muzzle flashes on each shot
@@ -215,10 +212,10 @@ export function ConfettiCannons({ active }: { active: boolean }) {
           </group>
         ))}
       </group>
-      <instancedMesh ref={mesh} args={[undefined, undefined, MAX]} frustumCulled={false}>
+      <instancedMesh ref={mesh} args={[undefined, undefined, MAX]} frustumCulled={false} visible={false}>
         <planeGeometry args={[0.95, 0.6]} />
         <meshBasicMaterial side={THREE.DoubleSide} toneMapped={false} />
       </instancedMesh>
     </group>
   );
-}
+});

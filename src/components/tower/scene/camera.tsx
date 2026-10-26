@@ -1,38 +1,50 @@
 import * as THREE from "three";
-import { useEffect, useRef, type RefObject } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import { entrances } from "../entrances";
 import { EDGE_SE, edgeOutwardNormal, stages } from "../geometry";
-import type { ControlsLike } from "./helpers";
-import { useFacadeFrame } from "./maintenance";
 import { TYPING_FOCUS_Y, TYPING_VIEW } from "../typing/game";
 import { crossingView } from "./crossing";
+import { CLEAN_FACADE } from "./maintenance";
 import { raceView } from "./race";
 
 /** The chase camera of the race takes in more than the viewer's long lens. */
 const RACE_FOV = 58;
 
+type ControlsLike = { target: THREE.Vector3; update: () => void };
+
+/** What the camera squares up to for a game: a facade of the tower, or the bridge. */
+export type Facing = "none" | "cleaning" | "typing" | "crossing" | "race";
+
+/** Ease the orbit target and the camera toward a view, at rate k. */
+function dampView(c: ControlsLike, camera: THREE.Camera, target: [number, number, number], from: [number, number, number], k: number, dt: number) {
+  c.target.set(THREE.MathUtils.damp(c.target.x, target[0], k, dt), THREE.MathUtils.damp(c.target.y, target[1], k, dt), THREE.MathUtils.damp(c.target.z, target[2], k, dt));
+  camera.position.set(THREE.MathUtils.damp(camera.position.x, from[0], k, dt), THREE.MathUtils.damp(camera.position.y, from[1], k, dt), THREE.MathUtils.damp(camera.position.z, from[2], k, dt));
+}
+
 /**
- * Eases the orbit target and camera distance when a mode changes (garage → look low,
- * explode → back off), then leaves the camera to the user. Portrait screens start farther out.
+ * The orbit controls, and the rig that moves them: it eases the orbit target and camera
+ * distance when a mode changes (garage → look low, explode → back off), then leaves the camera
+ * to the user. Portrait screens start farther out. While a game has the view the rig holds the
+ * camera on it and the user cannot orbit.
  */
-export function CameraRig({
+export const CameraControls = memo(function CameraControls({
   showGarage,
   explode,
+  autoRotate,
   facing,
-  controlsRef,
 }: {
   showGarage: boolean;
   explode: boolean;
-  /** square up to the Hardbruecke facade for a game, or go to the bridge for one of those played there */
-  facing: "none" | "cleaning" | "typing" | "crossing" | "race";
-  controlsRef: RefObject<ControlsLike | null>;
+  autoRotate: boolean;
+  facing: Facing;
 }) {
+  const controlsRef = useRef<ControlsLike | null>(null);
+  const free = facing === "none";
   const size = useThree((st) => st.size);
   const portrait = size.height > size.width;
   const mode = facing !== "none" ? facing : showGarage ? "garage" : explode ? "explode" : "default";
-  const facade = useFacadeFrame();
-  const goal = useRef(new THREE.Vector3());
   const anim = useRef({ until: 0, mode: "" });
   const dirRef = useRef(new THREE.Vector3());
   const lens = useRef(0);
@@ -71,13 +83,7 @@ export function CameraRig({
     // a game on the bridge: look down across the deck, or chase the player's car
     const view = facing === "crossing" ? crossingView(portrait) : facing === "race" ? raceView(portrait) : null;
     if (view) {
-      const k = facing === "race" ? 8 : 3;
-      c.target.x = THREE.MathUtils.damp(c.target.x, view.target[0], k, dt);
-      c.target.y = THREE.MathUtils.damp(c.target.y, view.target[1], k, dt);
-      c.target.z = THREE.MathUtils.damp(c.target.z, view.target[2], k, dt);
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, view.camera[0], k, dt);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, view.camera[1], k, dt);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, view.camera[2], k, dt);
+      dampView(c, camera, view.target, view.camera, facing === "race" ? 8 : 3, dt);
       c.update();
       return;
     }
@@ -85,19 +91,13 @@ export function CameraRig({
       // Square up to a game's surface: the cleaning facade, or the three-faced flank the
       // typing game writes on (far enough back to take in all three faces).
       const typing = facing === "typing";
-      const { a, along, len, lowY, highY } = facade;
-      const out = typing ? TYPING_VIEW.out : facade.out;
+      const { a, along, len, lowY, highY } = CLEAN_FACADE;
+      const out = typing ? TYPING_VIEW.out : CLEAN_FACADE.out;
       const mx = typing ? TYPING_VIEW.center[0] : a[0] + (along[0] * len) / 2;
       const mz = typing ? -TYPING_VIEW.center[1] : -(a[1] + (along[1] * len) / 2);
       const my = typing ? TYPING_FOCUS_Y : (lowY + highY) / 2;
       const dist = typing ? (portrait ? 250 : 128) : portrait ? 215 : 150;
-      goal.current.set(mx + out[0] * dist, my + 6, mz - out[1] * dist);
-      c.target.x = THREE.MathUtils.damp(c.target.x, mx, 3, dt);
-      c.target.y = THREE.MathUtils.damp(c.target.y, my, 3, dt);
-      c.target.z = THREE.MathUtils.damp(c.target.z, mz, 3, dt);
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, goal.current.x, 3, dt);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, goal.current.y, 3, dt);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, goal.current.z, 3, dt);
+      dampView(c, camera, [mx, my, mz], [mx + out[0] * dist, my + 6, mz - out[1] * dist], 3, dt);
       c.update();
       return;
     }
@@ -118,5 +118,20 @@ export function CameraRig({
     }
     c.update();
   });
-  return null;
-}
+
+  return (
+    <OrbitControls
+      ref={controlsRef as never}
+      makeDefault
+      enablePan={false}
+      enabled={free}
+      autoRotate={autoRotate && free}
+      autoRotateSpeed={0.5}
+      zoomToCursor
+      minDistance={explode ? 14 : 45}
+      maxDistance={600}
+      maxPolarAngle={showGarage ? Math.PI * 0.64 : Math.PI * 0.495}
+      target={[0, 58, 0]}
+    />
+  );
+});

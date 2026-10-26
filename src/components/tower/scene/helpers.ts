@@ -1,6 +1,4 @@
-import { OPEN_GAP, type ExtractState } from "../Interiors";
 import * as THREE from "three";
-import { floorBands } from "@/data/tower";
 import { perimeterOffsets, type Pt } from "../geometry";
 
 /** Polygon in (East, North) → THREE.Shape in (x, y) that becomes (x, -z) after rotateX(-π/2). */
@@ -76,59 +74,23 @@ export function hash(i: number, j: number): number {
   return n - Math.floor(n);
 }
 
-export function bandForFloor(floor: number) {
-  return floorBands.find((b) => floor >= b.from && floor <= b.to);
-}
-
+/** For objects the pointer and the labels' occlusion tests should pass straight through. */
 export const noRaycast = () => null;
-
-export const EXPLODE_GAP = 2.6;
 
 export const AX_X = new THREE.Vector3(1, 0, 0);
 
 export const AX_Y = new THREE.Vector3(0, 1, 0);
 
-/** Yaw that lays the tower's long axis (bearing 34 deg) horizontally on screen when bound to the camera. */
-export const PLATE_YAW = Math.atan2(-Math.cos((34 * Math.PI) / 180), Math.sin((34 * Math.PI) / 180));
-
-export type ControlsLike = { target: THREE.Vector3; update: () => void };
-
-/** How far floor f is lifted by the stack opening below it (either extract slot). */
-export function liftAbove(f: number, ex: ExtractState, prev: ExtractState): number {
-  const a = ex.floor >= 0 && f > ex.floor ? ex.open : 0;
-  const b = prev.floor >= 0 && f > prev.floor ? prev.open : 0;
-  return OPEN_GAP * Math.max(a, b);
-}
-
-/** Explode-view state shared by plates, rings and interiors. */
-export type ExplodeState = {
-  gap: number;
-  thin: number;
-  /** damped hovered floor (or -1) driving the dock-style bulge */
-  hoverF: number;
-  /** damped strength of the bulge, 0..1 */
-  hoverAmt: number;
-};
-
-const BULGE_SIGMA = 1.6; // floors
-const BULGE_SCALE = 0.32; // extra footprint scale at the centre
-const BULGE_SPREAD = 2.2; // extra vertical room around the hovered floor, metres
-
-/** Dock-style bulge: 0..1 for floor f around the hovered floor. */
-export function bulge(f: number, x: ExplodeState): number {
-  if (x.hoverAmt < 0.001 || x.hoverF < 0) return 0;
-  const d = (f - x.hoverF) / BULGE_SIGMA;
-  return x.hoverAmt * Math.exp(-0.5 * d * d);
-}
-
-/** Footprint scale for floor f in the exploded view. */
-export function bulgeScale(f: number, x: ExplodeState): number {
-  return 1 + BULGE_SCALE * bulge(f, x);
-}
-
-/** Extra vertical offset so the bulged floors have room: above the hovered floor up, below down. */
-export function bulgeLift(f: number, x: ExplodeState): number {
-  if (x.hoverAmt < 0.001 || x.hoverF < 0) return 0;
-  const t = (f - x.hoverF) / (BULGE_SIGMA * 1.5);
-  return BULGE_SPREAD * x.hoverAmt * Math.tanh(t);
+/**
+ * A canvas texture drawn once by `draw` (sRGB). Glows, stripes and gradients that would cost a
+ * file each are a few lines of 2D canvas instead.
+ */
+export function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = width;
+  c.height = height;
+  draw(c.getContext("2d")!, width, height);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

@@ -1,5 +1,6 @@
 import { FLOORS, perimeterOffsets, stageForFloor } from "./geometry";
-import { PANE_COLUMNS, PANE_W, PaneField, seededRandom } from "./paneField";
+import { seededRandom } from "./math";
+import { PANE_COLUMNS, PANE_W, PaneField } from "./paneField";
 
 /** How far an open window stands proud of the facade, in metres (the facade shader is built with it). */
 // TESTING: exaggerated so the effect is easy to judge; the real opening is 0.06.

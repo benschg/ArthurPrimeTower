@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
 import { CALM, road } from "../crossing/road";
-import { sound, type Note } from "../pacman/sound";
+import { GameStore, useGameKeys } from "../gameStore";
+import { sound, tune, type Note } from "../sound";
 import { FINISH, newGame, readBest, START, steer, step, type RaceEvent, type RaceGame, type RacePhase } from "./game";
-import { useGamepad } from "../gamepad";
 
-/** What the HUD shows; replaced (never mutated) when one of its values changes. */
+/** What the HUD shows. */
 export type RaceHud = {
   active: boolean;
   phase: RacePhase;
@@ -29,8 +28,6 @@ export type RaceHud = {
 
 const IDLE: RaceHud = { active: false, phase: "count", count: 3, go: false, place: 1, tenths: 0, kmh: 0, progress: 0, crashes: 0, best: 0, newBest: false, muted: false };
 
-const tune = (freqs: number[], each: number, gain = 0.6): Note[] => freqs.map((f, i) => ({ f, at: i * each, dur: each, type: "triangle", gain }));
-
 const SOUNDS: Record<RaceEvent, Note[]> = {
   beep: [{ f: 440, at: 0, dur: 0.16, type: "square", gain: 0.35 }],
   go: [{ f: 880, at: 0, dur: 0.45, type: "square", gain: 0.4 }],
@@ -43,14 +40,13 @@ const SOUNDS: Record<RaceEvent, Note[]> = {
 };
 
 /**
- * Runs the Hardbrücke sprint. The scene steps it once per rendered frame, after the road,
- * and reads the cars straight from `game`; React only hears about what the HUD shows.
- * Also reachable in the browser console as primeTower.race.
+ * Runs the Hardbrücke sprint (see GameStore); the scene steps it after the road. Also reachable
+ * in the browser console as primeTower.race.
  */
-class Race {
-  game: RaceGame | null = null;
-  private hud: RaceHud = IDLE;
-  private listeners = new Set<() => void>();
+class Race extends GameStore<RaceGame, RaceHud> {
+  constructor() {
+    super(IDLE);
+  }
 
   start(): this {
     this.game = newGame(readBest());
@@ -80,13 +76,6 @@ class Race {
     return this;
   }
 
-  toggleSound(): this {
-    sound.setMuted(!sound.muted);
-    sound.wake();
-    this.publish();
-    return this;
-  }
-
   /** Advance by dt seconds. */
   frame(dt: number): void {
     const g = this.game;
@@ -97,59 +86,27 @@ class Race {
     this.publish();
   }
 
-  subscribe = (fn: () => void) => {
-    this.listeners.add(fn);
-    return () => {
-      this.listeners.delete(fn);
+  protected hudOf(g: RaceGame): RaceHud {
+    const me = g.racers[0];
+    return {
+      active: true,
+      phase: g.phase,
+      count: g.phase === "count" ? Math.ceil(g.count) : 0,
+      go: g.phase === "race" && g.time < 0.9,
+      place: g.place,
+      tenths: Math.floor((me.finished || g.time) * 10),
+      kmh: Math.round((me.v * 3.6) / 5) * 5,
+      progress: Math.round(Math.min(1, Math.max(0, (me.p - START) / (FINISH - START))) * 50) / 50,
+      crashes: g.crashes,
+      best: g.best,
+      newBest: g.newBest,
+      muted: sound.muted,
     };
-  };
-
-  snapshot = (): RaceHud => this.hud;
-
-  private publish(): void {
-    const g = this.game;
-    const me = g?.racers[0];
-    const next: RaceHud =
-      g && me
-        ? {
-            active: true,
-            phase: g.phase,
-            count: g.phase === "count" ? Math.ceil(g.count) : 0,
-            go: g.phase === "race" && g.time < 0.9,
-            place: g.place,
-            tenths: Math.floor((me.finished || g.time) * 10),
-            kmh: Math.round((me.v * 3.6) / 5) * 5,
-            progress: Math.round(Math.min(1, Math.max(0, (me.p - START) / (FINISH - START))) * 50) / 50,
-            crashes: g.crashes,
-            best: g.best,
-            newBest: g.newBest,
-            muted: sound.muted,
-          }
-        : IDLE;
-    const cur = this.hud;
-    const same = (Object.keys(next) as (keyof RaceHud)[]).every((k) => cur[k] === next[k]);
-    if (same) return;
-    this.hud = next;
-    for (const fn of this.listeners) fn();
   }
 }
 
 export type { Race };
 export const race = new Race();
-
-const idle = () => IDLE;
-const isActive = () => race.snapshot().active;
-const notActive = () => false;
-
-/** The HUD's view of the race. */
-export function useRaceHud(): RaceHud {
-  return useSyncExternalStore(race.subscribe, race.snapshot, idle);
-}
-
-/** Whether a race is on; changes only when one starts or stops. */
-export function useRaceActive(): boolean {
-  return useSyncExternalStore(race.subscribe, isActive, notActive);
-}
 
 const LEFT = new Set(["ArrowLeft", "a"]);
 const RIGHT = new Set(["ArrowRight", "d"]);
@@ -161,40 +118,18 @@ const GAS = new Set(["ArrowUp", "w"]); // the car accelerates by itself; the key
  * A gamepad: d-pad or stick left and right, down or the left trigger to brake, A or Start, Back/Select.
  */
 export function useRaceKeys(active: boolean, onQuit: () => void): void {
-  useGamepad(active, {
-    onDir: (dx) => dx && race.steer(dx),
-    onDownHeld: (held) => race.brake(held),
-    onConfirm: () => race.game?.phase === "done" && race.start(),
-    onBack: onQuit,
-  });
-  useEffect(() => {
-    if (!active) return;
-    const name = (e: KeyboardEvent) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
-    const onDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const k = name(e);
-      if (k === "Escape") {
-        e.preventDefault();
-        onQuit();
-      } else if (k === "Enter" && race.game?.phase === "done") {
-        e.preventDefault();
-        race.start();
-      } else if (LEFT.has(k) || RIGHT.has(k)) {
-        e.preventDefault();
+  useGameKeys(active, {
+    over: () => race.game?.phase === "done",
+    restart: () => race.start(),
+    quit: onQuit,
+    onKey: (k, e) => {
+      if (LEFT.has(k) || RIGHT.has(k)) {
         if (!e.repeat) race.steer(LEFT.has(k) ? -1 : 1);
-      } else if (BRAKE.has(k)) {
-        e.preventDefault();
-        race.brake(true);
-      } else if (GAS.has(k)) e.preventDefault();
-    };
-    const onUp = (e: KeyboardEvent) => {
-      if (BRAKE.has(name(e))) race.brake(false);
-    };
-    window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-    };
-  }, [active, onQuit]);
+      } else if (BRAKE.has(k)) race.brake(true);
+      else return GAS.has(k);
+      return true;
+    },
+    onKeyUp: (k) => BRAKE.has(k) && race.brake(false),
+    pad: { onDir: (dx) => dx && race.steer(dx), onDownHeld: (held) => race.brake(held) },
+  });
 }

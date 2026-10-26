@@ -12,6 +12,7 @@ import {
   coreBoxesDrawing,
   DRAWING_ROT_Y,
   drawingToWorld,
+  edgeFrame,
   edgeOutwardNormal,
   FLOORS,
   isConvexVertex,
@@ -122,26 +123,19 @@ export function buildInteriors(): Record<Kind, Inst[]> {
       }
     }
 
-    // --- lifts: two banks of four in the main core (drawing frame), doors toward the lobby
-    const bankX = [18.0, 20.6, 23.2, 25.8];
-    for (const [rowY, doorSide] of [
-      [19.6, 1],
-      [28.3, -1],
-    ] as const) {
-      for (const x of bankX) {
-        const [e, n] = drawingToWorld([x, rowY]);
-        push("liftShaft", f, e, n, H / 2, DRAWING_ROT_Y, 2.3, H, 2.3);
-        const [de, dn] = drawingToWorld([x, rowY + doorSide * 1.2]);
-        push("liftDoor", f, de, dn, 1.05, DRAWING_ROT_Y, 1.4, 2.1, 0.08);
-      }
-    }
-    // fire lift in the north-east core
-    {
-      const [e, n] = drawingToWorld([46.3, 14.6]);
+    // --- lifts: the two banks of four in the main core open toward the lobby between them,
+    // the fire lift in the north-east core toward the west
+    LIFT_SHAFTS.forEach(([x, y], i) => {
+      const [e, n] = drawingToWorld([x, y]);
       push("liftShaft", f, e, n, H / 2, DRAWING_ROT_Y, 2.3, H, 2.3);
-      const [de, dn] = drawingToWorld([45.1, 14.6]);
-      push("liftDoor", f, de, dn, 1.05, DRAWING_ROT_Y, 0.08, 2.1, 1.4);
-    }
+      if (i < 8) {
+        const [de, dn] = drawingToWorld([x, y + (i < 4 ? 1.2 : -1.2)]);
+        push("liftDoor", f, de, dn, 1.05, DRAWING_ROT_Y, 1.4, 2.1, 0.08);
+      } else {
+        const [de, dn] = drawingToWorld([x - 1.2, y]);
+        push("liftDoor", f, de, dn, 1.05, DRAWING_ROT_Y, 0.08, 2.1, 1.4);
+      }
+    });
     // --- stairs: TK3 in the main core, TK2 in the north-east core (12 steps per run)
     for (const [sx0, sy0, dir] of [
       [14.2, 22.6, 1],
@@ -180,13 +174,7 @@ export function buildInteriors(): Record<Kind, Inst[]> {
     // --- perimeter cells along every facade
     const nEdges = poly.length;
     for (let i = 0; i < nEdges; i++) {
-      const a = poly[i];
-      const b = poly[(i + 1) % nEdges];
-      const dE = b[0] - a[0];
-      const dN = b[1] - a[1];
-      const L = Math.hypot(dE, dN);
-      const along: Pt = [dE / L, dN / L];
-      const outN = edgeOutwardNormal(poly, i);
+      const { a, b, len: L, along, out: outN } = edgeFrame(poly, i);
       const inw: Pt = [-outN[0], -outN[1]];
       const rot = rotFor(along[0], along[1]);
       const cells = Math.max(1, Math.round(L / CELL));

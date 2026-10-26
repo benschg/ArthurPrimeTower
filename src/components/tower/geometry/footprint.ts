@@ -86,6 +86,21 @@ export function edgeOutwardNormal(poly: Pt[], i: number): Pt {
   return ccw ? [ey / len, -ex / len] : [-ey / len, ex / len];
 }
 
+/** Edge i of a polygon (vertex i to i+1): its ends, length, unit direction, unit outward normal and midpoint. */
+export function edgeFrame(poly: Pt[], i: number): { a: Pt; b: Pt; len: number; along: Pt; out: Pt; mid: Pt } {
+  const a = poly[i];
+  const b = poly[(i + 1) % poly.length];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  return {
+    a,
+    b,
+    len,
+    along: [(b[0] - a[0]) / len, (b[1] - a[1]) / len],
+    out: edgeOutwardNormal(poly, i),
+    mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+  };
+}
+
 export function lineIntersect(p1: Pt, d1: Pt, p2: Pt, d2: Pt): Pt {
   const det = d1[0] * d2[1] - d1[1] * d2[0];
   if (Math.abs(det) < 1e-9) return [p2[0], p2[1]];

@@ -1,11 +1,9 @@
-"use client";
-
-import { bulgeLift, bulgeScale, type ExplodeState } from "./scene/helpers";
-import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { floorElevation, FLOORS, TOWER_HEIGHT } from "./geometry";
-import { buildInteriors, INTERIOR_BASE, INTERIOR_HEIGHT, KINDS, type Inst, type Kind } from "./interiorLayout";
+import { memo, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import { floorElevation, FLOORS, TOWER_HEIGHT } from "../geometry";
+import { buildInteriors, INTERIOR_BASE, INTERIOR_HEIGHT, KINDS, type Inst, type Kind } from "../interiorLayout";
+import { bulgeLift, bulgeScale, liftAbove, PLATE_LIFT, useStage, type ExtractState } from "./stage";
 
 const ONE = new THREE.Vector3(1, 1, 1);
 
@@ -33,45 +31,20 @@ const LOOK: Record<Kind, Look> = {
 };
 
 /**
- * Pull-out state. `open` lifts everything above the floor; `t` blends the plate from its
- * slot to `pos`/`quat`, a transform kept relative to the camera by the Scene each frame.
- */
-export type ExtractState = {
-  floor: number;
-  t: number;
-  open: number;
-  shift: number;
-  pos: THREE.Vector3;
-  quat: THREE.Quaternion;
-  /** user adjustments while the floor is bound to the camera */
-  spin: number;
-  tilt: number;
-  zoom: number;
-};
-export const PLATE_TILT = 0.95;
-export const OPEN_GAP = 9;
-export const PLATE_LIFT = 0.2; // plate meshes sit this far above the floor elevation
-
-/**
  * Instanced interiors. One InstancedMesh per kind covers all 36 floors. In the exploded
  * view every floor is drawn (with lift cables spanning the whole stack); when a single
  * floor is pulled out of the tower only that floor's pieces are drawn, at its offset.
  * Matrices recompose only while the explode gap or the pull-out amount is changing.
  */
-export function Interiors({
-  explodeRef,
-  extractRef,
-  outgoingRef,
+export const Interiors = memo(function Interiors({
   active,
   hideFloor = -1,
 }: {
-  explodeRef: RefObject<ExplodeState>;
-  extractRef: RefObject<ExtractState>;
-  outgoingRef: RefObject<ExtractState>;
   active: boolean;
   /** a floor whose fit-out is cleared away (its plate is a game board), or -1 */
   hideFloor?: number;
 }) {
+  const { explodeRef, extractRef, outgoingRef } = useStage();
   const data = useMemo(() => buildInteriors(), []);
   // per kind, per floor: [start, end) into the instance list (instances are built floor by floor)
   const ranges = useMemo(() => {
@@ -99,19 +72,18 @@ export function Interiors({
   const cyl = useMemo(() => new THREE.CylinderGeometry(0.5, 0.5, 1, 14), []);
 
   useFrame(() => {
-    const gap = explodeRef.current?.gap ?? 0;
     const xs = explodeRef.current;
     const ex = extractRef.current;
     const prev = outgoingRef.current;
+    const gap = xs.gap;
     const a = applied.current;
     const exploded = gap > 0.001;
-    const bulgeKey = xs ? xs.hoverAmt * 1000 + xs.hoverF : 0;
-    const exFloor = ex?.floor ?? -1;
-    const prevFloor = prev?.floor ?? -1;
-    const open = ex?.open ?? 0;
-    const prevOpen = prev?.open ?? 0;
-    const liftFor = (f: number) =>
-      OPEN_GAP * Math.max(exFloor >= 0 && f > exFloor ? open : 0, prevFloor >= 0 && f > prevFloor ? prevOpen : 0);
+    const bulgeKey = xs.hoverAmt * 1000 + xs.hoverF;
+    const exFloor = ex.floor;
+    const prevFloor = prev.floor;
+    const open = ex.open;
+    const prevOpen = prev.open;
+    const liftFor = (f: number) => liftAbove(f, ex, prev);
     const stackTop = TOWER_HEIGHT + (FLOORS - 1) * gap + liftFor(FLOORS);
 
     // Whole stack (exploded view): recompose only when the gap, the opening or the floor changes.
@@ -133,8 +105,8 @@ export function Interiors({
         if (exploded) {
           for (let i = 0; i < list.length; i++) {
             const it = list[i];
-            const bs = xs ? bulgeScale(it.f, xs) : 1;
-            const bl = xs ? bulgeLift(it.f, xs) : 0;
+            const bs = bulgeScale(it.f, xs);
+            const bl = bulgeLift(it.f, xs);
             d.position.set(it.e * bs, floorElevation(it.f) + INTERIOR_BASE + it.f * gap + liftFor(it.f) + bl + it.y, -it.n * bs);
             d.rotation.set(0, it.rot, 0);
             // a hidden floor keeps its slots (the ranges below index into them) at zero size
@@ -164,8 +136,8 @@ export function Interiors({
     // The pulled-out floor(s) follow their camera-bound transforms every frame. When not
     // exploded the current floor's pieces take the first slots and the outgoing floor's the next.
     const slots: ExtractState[] = [];
-    if (ex && exFloor >= 0) slots.push(ex);
-    if (prev && prevFloor >= 0 && prevFloor !== exFloor) slots.push(prev);
+    if (exFloor >= 0) slots.push(ex);
+    if (prevFloor >= 0 && prevFloor !== exFloor) slots.push(prev);
     for (const k of KINDS) {
       if (k === "liftCable" || k === "liftCar") continue;
       const mesh = refs.current[k];
@@ -219,7 +191,7 @@ export function Interiors({
     } else if (cars && !exploded) {
       cars.count = 0;
     }
-    const op = exploded ? Math.min(1, gap / 0.9) : Math.max(ex?.t ?? 0, prev?.t ?? 0);
+    const op = exploded ? Math.min(1, gap / 0.9) : Math.max(ex.t, prev.t);
     for (const k of KINDS) {
       const m = refs.current[k]?.material as THREE.MeshStandardMaterial | undefined;
       if (m) m.opacity = (LOOK[k].opacity ?? 1) * op;
@@ -252,4 +224,4 @@ export function Interiors({
       ))}
     </group>
   );
-}
+});

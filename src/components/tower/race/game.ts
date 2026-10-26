@@ -5,7 +5,9 @@
  * the race: the car then sits behind it until the player moves over. Rules only: the scene draws the cars, the store runs the game.
  * Distances as on the road (crossing/road.ts): p is metres along the lane, z across the deck.
  */
+import { bestScore } from "@/lib/storage";
 import { KINDS, LANE_Z, LOOP, road, type Flow } from "../crossing/road";
+import { smoothstep } from "../math";
 
 /** Where the racers line up, and the finish line (they brake on the stretch after it). */
 export const START = 40;
@@ -15,7 +17,6 @@ export const CAR_WIDTH = 1.8;
 
 const SHIFT = 0.22; // seconds for a lane change
 const BRAKE = 20; // m/s²
-const BEST_KEY = "prime-tower-race-best";
 
 /** Traffic for a race: enough to be in the way in every lane, buses included. */
 const RACE_FLOW: Flow = { counts: [11, 13, 4], headway: 0.9, pace: 1 };
@@ -67,21 +68,8 @@ export type RaceGame = {
 /** Anything a racer can run into or has to get around. */
 type Obstacle = { p: number; z: number; len: number; width: number; v: number };
 
-export function readBest(): number {
-  try {
-    return Number(window.localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writeBest(v: number) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(v));
-  } catch {
-    /* storage unavailable */
-  }
-}
+const bestStore = bestScore("prime-tower-race-best");
+export const readBest = bestStore.read;
 
 const racer = (lane: number, p: number, top: number, accel: number): Racer => ({
   lane,
@@ -206,7 +194,7 @@ function drive(g: RaceGame, r: Racer, traffic: Obstacle[], dt: number): void {
   }
   const z0 = r.z;
   if (r.shift < 1) r.shift = Math.min(1, r.shift + dt / SHIFT);
-  const t = r.shift * r.shift * (3 - 2 * r.shift);
+  const t = smoothstep(r.shift);
   r.z = LANE_Z[r.from] + (LANE_Z[r.lane] - LANE_Z[r.from]) * t;
   r.vz = dt > 0 ? (r.z - z0) / dt : 0;
   r.p = Math.min(LOOP - 6, r.p + r.v * dt);
@@ -269,7 +257,7 @@ export function step(g: RaceGame, dt: number): void {
     if (!g.best || me.finished < g.best) {
       g.best = me.finished;
       g.newBest = true;
-      writeBest(g.best);
+      bestStore.write(g.best);
     }
   }
 }

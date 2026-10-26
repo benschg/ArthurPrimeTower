@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { isLang, otherLang, type Lang } from "./index";
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { readStored, writeStored } from "@/lib/storage";
+import { isLang, type Lang } from "./index";
 
 const STORAGE_KEY = "prime-tower-lang";
 const DEFAULT_LANG: Lang = "de";
@@ -10,24 +11,15 @@ const DEFAULT_LANG: Lang = "de";
 const listeners = new Set<() => void>();
 let memory: Lang | null = null;
 
-function readStored(): Lang {
+function readLang(): Lang {
   if (memory) return memory;
-  try {
-    const v = window.localStorage.getItem(STORAGE_KEY);
-    if (isLang(v ?? undefined)) return v as Lang;
-  } catch {
-    /* storage unavailable */
-  }
-  return DEFAULT_LANG;
+  const v = readStored(STORAGE_KEY) ?? undefined;
+  return isLang(v) ? v : DEFAULT_LANG;
 }
 
-function writeStored(l: Lang) {
+function setLang(l: Lang) {
   memory = l;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, l);
-  } catch {
-    /* storage unavailable */
-  }
+  writeStored(STORAGE_KEY, l);
   listeners.forEach((cb) => cb());
 }
 
@@ -42,21 +34,18 @@ function subscribe(cb: () => void) {
 
 const getServerSnapshot = () => DEFAULT_LANG;
 
-type Ctx = { lang: Lang; setLang: (l: Lang) => void; toggle: () => void };
-const LangCtx = createContext<Ctx>({ lang: DEFAULT_LANG, setLang: () => {}, toggle: () => {} });
+type Ctx = { lang: Lang; setLang: (l: Lang) => void };
+const LangCtx = createContext<Ctx>({ lang: DEFAULT_LANG, setLang });
 
 /** German by default; a visitor's choice is remembered in localStorage, never in the URL. */
 export function LangProvider({ children }: { children: ReactNode }) {
-  const lang = useSyncExternalStore(subscribe, readStored, getServerSnapshot);
+  const lang = useSyncExternalStore(subscribe, readLang, getServerSnapshot);
 
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  const setLang = useCallback((l: Lang) => writeStored(l), []);
-  const toggle = useCallback(() => writeStored(otherLang(lang)), [lang]);
-
-  return <LangCtx.Provider value={{ lang, setLang, toggle }}>{children}</LangCtx.Provider>;
+  return <LangCtx.Provider value={{ lang, setLang }}>{children}</LangCtx.Provider>;
 }
 
 export function useLang() {
@@ -85,11 +74,8 @@ export function FlagCH({ className = "" }: { className?: string }) {
   );
 }
 
-/**
- * Language switch as two flags; the active language is highlighted. `column` stacks the
- * flags as individual round buttons (used in the viewer's control column).
- */
-export function LangToggle({ className = "", column = false }: { className?: string; column?: boolean }) {
+/** Language switch as two flags; the active language is highlighted. */
+export function LangToggle({ className = "" }: { className?: string }) {
   const { lang, setLang } = useLang();
   const flag = (l: Lang, label: string, Flag: typeof FlagUK) => (
     <button
@@ -101,8 +87,7 @@ export function LangToggle({ className = "", column = false }: { className?: str
       aria-pressed={lang === l}
       title={label}
       className={
-        (column ? "glass h-9 w-9 " : "h-7 w-8 ") +
-        "grid place-items-center rounded-full transition-all " +
+        "h-7 w-8 grid place-items-center rounded-full transition-all " +
         (lang === l ? "opacity-100 ring-2 ring-accent/70" : "opacity-45 hover:opacity-90")
       }
     >
@@ -110,7 +95,6 @@ export function LangToggle({ className = "", column = false }: { className?: str
     </button>
   );
   const flags = [flag("en", "English", FlagUK), flag("de", "Deutsch", FlagCH)];
-  if (column) return <>{flags}</>;
   return (
     <div className={"flex items-center gap-1 rounded-full border border-line px-1.5 py-1 " + className} role="group" aria-label="Language">
       {flags}

@@ -1,15 +1,17 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
+import { bandForFloor } from "@/data/tower";
 import { pick, type Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
-import { PLATE_LIFT, type ExtractState } from "../Interiors";
 import { FLOORS, TOWER_HEIGHT, floorHeight, floorElevation, growPolygon, stages, stageForFloor, DRAWING_ROT_Y, cores, perimeterColumns } from "../geometry";
-import { extrudeUp, bandForFloor, EXPLODE_GAP, liftAbove, bulgeLift, bulgeScale, type ExplodeState } from "./helpers";
+import { extrudeUp } from "./helpers";
+import { bulgeLift, bulgeScale, EXPLODE_GAP, liftAbove, PLATE_LIFT, useStage } from "./stage";
 import type { SceneProps } from "./types";
 
-export function Structure({ visible }: { visible: boolean }) {
+/** Cores and perimeter columns, shown in the tenants view where the glass fades. */
+export const Structure = memo(function Structure({ visible }: { visible: boolean }) {
   const columns = useMemo(() => perimeterColumns(stages[1].polygon), []);
   return (
     <group visible={visible}>
@@ -27,7 +29,7 @@ export function Structure({ visible }: { visible: boolean }) {
       ))}
     </group>
   );
-}
+});
 
 /** Picking volumes reach this far past the glass so the facade itself is hoverable. */
 const PICK_PAD = 0.25;
@@ -40,27 +42,23 @@ export function FloorSlices({
   onHover,
   onSelect,
   interactive,
-  explodeRef,
-  extractRef,
-  outgoingRef,
-  onPlateDrag,
-  onPlateZoom,
 }: Pick<SceneProps, "showTenants" | "explode" | "hovered" | "selected" | "onHover" | "onSelect"> & {
   interactive: boolean;
-  explodeRef: RefObject<ExplodeState>;
-  extractRef: RefObject<ExtractState>;
-  outgoingRef: RefObject<ExtractState>;
-  onPlateDrag: (dx: number, dy: number) => void;
-  onPlateZoom: (factor: number) => void;
 }) {
+  const { explodeRef, extractRef, outgoingRef } = useStage();
   // Interaction on the pulled-out plate: drag turns/tilts it, wheel zooms it. The events are
   // stopped before OrbitControls sees them so the camera stays put.
+  const onPlateDrag = (dx: number, dy: number) => {
+    const ex = extractRef.current;
+    ex.spin += dx * 0.008;
+    ex.tilt = THREE.MathUtils.clamp(ex.tilt + dy * 0.004, 0.3, 1.5);
+  };
   const drag = useRef({ active: false, x: 0, y: 0, moved: 0 });
   const hoverPlate = useRef(false);
   const gl = useThree((st) => st.gl);
   const isBound = (f: number) => {
     const ex = extractRef.current;
-    return !!ex && ex.floor === f && ex.t > 0.9;
+    return ex.floor === f && ex.t > 0.9;
   };
   useEffect(() => {
     const el = gl.domElement;
@@ -68,11 +66,12 @@ export function FloorSlices({
       if (!hoverPlate.current) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      onPlateZoom(Math.exp(-e.deltaY * 0.0012));
+      const ex = extractRef.current;
+      ex.zoom = THREE.MathUtils.clamp(ex.zoom * Math.exp(-e.deltaY * 0.0012), 0.55, 2.6);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [gl, onPlateZoom]);
+  }, [gl, extractRef]);
   const geos = useMemo(
     () =>
       Array.from({ length: FLOORS }, (_, f) => {
@@ -98,7 +97,7 @@ export function FloorSlices({
       Array.from({ length: FLOORS }, (_, f) =>
         function (this: THREE.Mesh, rc: THREE.Raycaster, its: THREE.Intersection[]) {
           const ex = extractRef.current;
-          if (!interactive || !ex || ex.floor !== f || ex.t <= 0.9) return;
+          if (!interactive || ex.floor !== f || ex.t <= 0.9) return;
           THREE.Mesh.prototype.raycast.call(this, rc, its);
         },
       ),
@@ -116,11 +115,11 @@ export function FloorSlices({
   );
 
   useFrame(() => {
-    // the Scene damps the explode and pull-out amounts; plates follow them
+    // useStackMotion damps the explode and pull-out amounts; plates follow them
     const x = explodeRef.current;
     const ex = extractRef.current;
     const prev = outgoingRef.current;
-    if (!group.current || !picks.current || !x || !ex || !prev) return;
+    if (!group.current || !picks.current) return;
 
     // Bottom of every floor's slot, without the hover bulge.
     const base = bases.current;

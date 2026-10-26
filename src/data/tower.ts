@@ -146,6 +146,11 @@ export const floorBands: FloorBand[] = (() => {
   return bands;
 })();
 
+/** The band floor f belongs to. */
+export function bandForFloor(floor: number): FloorBand | undefined {
+  return floorBands.find((b) => floor >= b.from && floor <= b.to);
+}
+
 export const sources: Source[] = [
   { title: "Gigon/Guyer – Prime Tower project page", url: "https://www.gigon-guyer.ch/en/projects/prime-tower/" },
   { title: "primetower.ch – official site (Swiss Prime Site / Wincasa)", url: "https://www.primetower.ch/" },

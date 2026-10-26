@@ -1,15 +1,35 @@
 import * as THREE from "three";
-import { useMemo } from "react";
+import { memo, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { useFrame } from "@react-three/fiber";
 import { Grid, Html } from "@react-three/drei";
 import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
 import { neighbours, bridge, bridgePiers, stationPlatform, railway } from "../geometry";
 import { extrudeUp } from "./helpers";
-import { BridgeTraffic, Trains } from "./traffic";
+import { DAY_GROUND, NIGHT_GROUND } from "./palette";
+import { useStage } from "./stage";
+import { BridgeTraffic } from "./traffic";
+import { Trains } from "./trains";
 import { CrossingFrog } from "./crossing";
 import { RaceCars } from "./race";
 
-export function Footprint({ polygon, height, color, floors, name, note }: (typeof neighbours)[number]) {
+/** Refs that are set once the scene has mounted, which is before any label tests them. */
+type Occluders = RefObject<THREE.Object3D>[];
+
+/**
+ * A site label, hidden while the tower, a building or the bridge deck stands in front of it.
+ * Only those are tested: occlusion against the whole scene would raycast every object in it
+ * (stars, traffic, interiors) for every label, every frame.
+ */
+function SiteLabel({ position, occluders, children }: { position: [number, number, number]; occluders: Occluders; children: ReactNode }) {
+  return (
+    <Html zIndexRange={[5, 0]} position={position} center occlude={occluders} distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
+      {children}
+    </Html>
+  );
+}
+
+function Footprint({ polygon, height, color, floors, name, note, occluders }: (typeof neighbours)[number] & { occluders: Occluders }) {
   const geo = useMemo(() => extrudeUp(polygon, height), [polygon, height]);
   const lines = useMemo(() => {
     const pts: THREE.Vector3[] = [];
@@ -34,42 +54,61 @@ export function Footprint({ polygon, height, color, floors, name, note }: (typeo
         <lineBasicMaterial color="#0b0f14" transparent opacity={0.5} />
       </lineSegments>
       {name && (
-        <Html zIndexRange={[5, 0]} position={[cx, height + 4, -cy]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
+        <SiteLabel position={[cx, height + 4, -cy]} occluders={occluders}>
           <div className="text-center whitespace-nowrap">
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/80">{name}</div>
             {note && <div className="text-[9px] text-muted">{note}</div>}
           </div>
-        </Html>
+        </SiteLabel>
       )}
     </group>
   );
 }
 
-export function Site({
+/** The plaza and streets: darker by night, and see-through while the garage beneath shows. */
+function Ground() {
+  const { blendRef } = useStage();
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame(() => {
+    const m = mat.current;
+    if (!m) return;
+    const { night, garage } = blendRef.current;
+    m.opacity = THREE.MathUtils.lerp(1, 0.12, garage);
+    m.color.lerpColors(DAY_GROUND, NIGHT_GROUND, night);
+  });
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[1200, 1200]} />
+      {/* Always in the transparent pass with depth writes on. */}
+      <meshStandardMaterial ref={mat} color="#161d27" roughness={1} transparent opacity={1} />
+    </mesh>
+  );
+}
+
+export const Site = memo(function Site({
   lang,
-  night,
   interactive,
   onPlayBridge,
   onHoverBridge,
 }: {
   lang: Lang;
-  night: boolean;
   /** no game has the scene: a click on the bridge may start one of those played there */
   interactive: boolean;
   onPlayBridge: () => void;
   onHoverBridge: (v: boolean) => void;
 }) {
+  const { glassRef } = useStage();
+  const buildings = useRef<THREE.Group>(null);
+  const deck = useRef<THREE.Mesh>(null);
+  // the station sits beneath the deck, and the deck hides its label from above
+  const occluders = useMemo(() => [glassRef, buildings, deck] as Occluders, [glassRef]);
   const lab = ui[lang].viewer.labels;
   const bRot = (bridge.bearing * Math.PI) / 180;
   const rRot = (railway.bearing * Math.PI) / 180;
   const station = useMemo(() => extrudeUp(stationPlatform, 1.2), []);
   return (
     <group>
-      <mesh name="ground" rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[1200, 1200]} />
-        {/* Always in the transparent pass with depth writes on; the Blender animates opacity and colour. */}
-        <meshStandardMaterial color="#161d27" roughness={1} transparent opacity={1} />
-      </mesh>
+      <Ground />
       <Grid
         renderOrder={1}
         position={[0, 0.03, 0]}
@@ -85,14 +124,17 @@ export function Site({
         infiniteGrid
       />
 
-      {neighbours.map((b, i) => (
-        <Footprint key={i} {...b} />
-      ))}
+      <group ref={buildings}>
+        {neighbours.map((b, i) => (
+          <Footprint key={i} {...b} occluders={occluders} />
+        ))}
+      </group>
 
       {/* Hardbrücke elevated road. Rotation about Y by -bearing aligns local +x with the compass bearing. */}
       <group position={[bridge.center[0], 0, -bridge.center[1]]} rotation={[0, Math.PI / 2 - bRot, 0]}>
         {/* The deck: click it to play one of the bridge's games (a drag that ends here is an orbit, not a click) */}
         <mesh
+          ref={deck}
           position={[0, bridge.deckHeight, 0]}
           castShadow
           receiveShadow
@@ -119,10 +161,10 @@ export function Site({
             <meshStandardMaterial color="#39434f" />
           </mesh>
         ))}
-        <Html zIndexRange={[5, 0]} position={[110, bridge.deckHeight + 6, 0]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
+        <SiteLabel position={[110, bridge.deckHeight + 6, 0]} occluders={occluders}>
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.hardbruecke}</div>
-        </Html>
-        <BridgeTraffic night={night} />
+        </SiteLabel>
+        <BridgeTraffic />
         <CrossingFrog />
         <RaceCars />
       </group>
@@ -131,9 +173,9 @@ export function Site({
       <mesh geometry={station} position={[0, 0.05, 0]} receiveShadow>
         <meshStandardMaterial color="#5b6774" roughness={0.9} />
       </mesh>
-      <Html zIndexRange={[5, 0]} position={[38, 6, 45]} center occlude distanceFactor={220} style={{ pointerEvents: "none" }} className="site-label">
+      <SiteLabel position={[38, 6, 45]} occluders={occluders}>
         <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-paper/70 whitespace-nowrap">{lab.station}</div>
-      </Html>
+      </SiteLabel>
 
       {/* Railway corridor south-west of the tower */}
       <group position={[railway.center[0], 0.05, -railway.center[1]]} rotation={[0, Math.PI / 2 - rRot, 0]}>
@@ -143,8 +185,8 @@ export function Site({
             <meshStandardMaterial color="#3d4956" />
           </mesh>
         ))}
-        <Trains night={night} />
+        <Trains />
       </group>
     </group>
   );
-}
+});

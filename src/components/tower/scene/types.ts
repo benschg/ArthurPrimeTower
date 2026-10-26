@@ -37,6 +37,11 @@ export type CleanState = {
   secondsLeft: number;
 };
 
+/** Length of a window-cleaning round, seconds. */
+export const CLEAN_SECONDS = 60;
+
+export const IDLE_CLEAN: CleanState = { active: false, progress: 0, secondsLeft: CLEAN_SECONDS };
+
 export type UnitProps = {
   cleaning: CleanState;
   onStart: () => void;

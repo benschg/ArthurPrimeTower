@@ -4,7 +4,8 @@ import { useFrame } from "@react-three/fiber";
 import { bridge, bridgePoint } from "../geometry";
 import { COLS, ROWS, STEP } from "../crossing/game";
 import { DECK_TOP } from "../crossing/road";
-import { crossing, useCrossingActive } from "../crossing/store";
+import { crossing } from "../crossing/store";
+import { useGameActive } from "../gameStore";
 
 const ACCENT = "#7dd3c0";
 const SKIN = "#5cb84a";
@@ -38,7 +39,7 @@ export function crossingView(portrait: boolean): { target: [number, number, numb
  * stepped with the traffic (see BridgeTraffic).
  */
 export function CrossingFrog() {
-  const active = useCrossingActive();
+  const active = useGameActive(crossing);
   const spot = useRef<THREE.Group>(null);
   const frog = useRef<THREE.Group>(null);
   const ring = useRef<THREE.MeshBasicMaterial>(null);

@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-
-export const CONFETTI_COLORS = ["#7dd3c0", "#4f8fd6", "#f2c14e", "#e25c4a", "#a78bfa", "#ffffff"];
+import { CONFETTI_COLORS } from "../typing/cannons";
 
 /** Full-viewer confetti burst with a success card. Deterministic layout, CSS-driven motion. */
 export function Celebration({ title, text }: { title: string; text: string }) {

@@ -2,24 +2,19 @@ import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
-import { PLATE_LIFT, type ExtractState } from "../Interiors";
+import { useGameHud } from "../gameStore";
+import { DRAWING_ROT_Y, drawingToWorld } from "../geometry";
 import { INTERIOR_BASE } from "../interiorLayout";
-import { DRAWING_ROT_Y, drawingToWorld, growPolygon, stageForFloor } from "../geometry";
+import { smoothstep } from "../math";
 import { RISE_TIME, type Ghost, type PacGame } from "../pacman/game";
-import { CELL, PAC_FLOOR, getMaze, idx, type Cell } from "../pacman/maze";
-import { pacman, usePacmanHud } from "../pacman/store";
-import { AX_Y, extrudeUp, shapeFrom } from "./helpers";
+import { CELL, PAC_FLOOR, getMaze, idx } from "../pacman/maze";
+import { pacman } from "../pacman/store";
+import { AX_Y } from "./helpers";
+import { boardCells, boardGeometries, CORE_H, GHOST_H, GHOST_R, MOUTHS, PAC_R, WALL_H } from "./pacmanModels";
+import { PLATE_LIFT, useStage } from "./stage";
 
-// Heights and radii in cells (one cell is CELL metres).
-const WALL_H = 0.42;
-const CORE_H = 0.62;
-const PAC_R = 0.4;
-const GHOST_R = 0.4;
-const GHOST_H = 0.3; // straight part of the body, under the dome
-const MOUTHS = 8;
 /**
  * The player has its eyes on top of its head, either side of the mouth: the board is seen
  * from above. Azimuth is measured from the way it faces, so the widest mouth stays clear.
@@ -41,27 +36,6 @@ const FRONT_SLICE = 0.1;
 const toFront = (renderer: THREE.WebGLRenderer) => renderer.getContext().depthRange(0, FRONT_SLICE);
 const toScene = (renderer: THREE.WebGLRenderer) => renderer.getContext().depthRange(0, 1);
 
-const smooth = (v: number, a: number, b: number) => {
-  const t = THREE.MathUtils.clamp((v - a) / (b - a), 0, 1);
-  return t * t * (3 - 2 * t);
-};
-
-/** Dome on a short cylinder with a scalloped hem: the arcade ghost, in the round. */
-function ghostGeometry(): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [
-    new THREE.SphereGeometry(GHOST_R, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, GHOST_H, 0),
-    new THREE.CylinderGeometry(GHOST_R, GHOST_R, GHOST_H, 20, 1, true).translate(0, GHOST_H / 2, 0),
-    new THREE.CircleGeometry(GHOST_R, 20).rotateX(Math.PI / 2),
-  ];
-  for (let k = 0; k < 6; k++) {
-    const a = (k / 6) * Math.PI * 2;
-    parts.push(new THREE.SphereGeometry(GHOST_R * 0.36, 8, 6).translate(Math.cos(a) * GHOST_R * 0.66, 0, Math.sin(a) * GHOST_R * 0.66));
-  }
-  const merged = mergeGeometries(parts);
-  parts.forEach((p) => p.dispose());
-  return merged;
-}
-
 /** How far a ghost is out of its lift: 0 down in the shaft, 1 on the floor. */
 function outOfLift(gh: Ghost): number {
   if (gh.mode === "wait") return 0;
@@ -75,56 +49,11 @@ function outOfLift(gh: Ghost): number {
  * doors, the dots, the player and the ghosts. It rides the plate's camera-bound transform,
  * steps the game once per frame, and tells the game where the grid's axes point on screen.
  */
-export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<ExtractState>; lang: Lang }) {
+export function PacmanBoard({ lang }: { lang: Lang }) {
+  const { extractRef } = useStage();
   const maze = useMemo(() => getMaze(), []);
-  const cells = useMemo(() => {
-    const walls: Cell[] = [];
-    const cores: Cell[] = [];
-    const dots: Cell[] = [];
-    const powers: Cell[] = [];
-    let sx = 0;
-    let sy = 0;
-    let lanes = 0;
-    for (let y = 0; y < maze.h; y++) {
-      for (let x = 0; x < maze.w; x++) {
-        const i = idx(maze, x, y);
-        if (maze.core[i]) cores.push({ x, y });
-        else if (maze.lane[i]) {
-          sx += x;
-          sy += y;
-          lanes++;
-          if (maze.pellets[i] === 2) powers.push({ x, y });
-          else if (maze.pellets[i] === 1) dots.push({ x, y });
-        } else if (maze.floor[i]) walls.push({ x, y });
-      }
-    }
-    return { walls, cores, dots, powers, centre: { x: sx / Math.max(1, lanes), y: sy / Math.max(1, lanes) } };
-  }, [maze]);
-
-  const geos = useMemo(() => {
-    const poly = stageForFloor(PAC_FLOOR).polygon;
-    const rimShape = shapeFrom(growPolygon(poly, -0.1));
-    rimShape.holes.push(shapeFrom(growPolygon(poly, -0.45)));
-    const rim = new THREE.ExtrudeGeometry(rimShape, { depth: WALL_H * CELL, bevelEnabled: false });
-    rim.rotateX(-Math.PI / 2);
-    return {
-      slab: extrudeUp(growPolygon(poly, -0.1), 0.06),
-      rim,
-      box: new THREE.BoxGeometry(1, 1, 1),
-      dot: new THREE.SphereGeometry(0.11, 10, 8),
-      power: new THREE.SphereGeometry(0.27, 14, 10),
-      ghost: ghostGeometry(),
-      eye: new THREE.SphereGeometry(0.115, 10, 8),
-      pupil: new THREE.SphereGeometry(0.06, 8, 6),
-      pacEye: new THREE.SphereGeometry(0.075, 10, 8),
-      pacGlint: new THREE.SphereGeometry(0.028, 6, 5),
-      // the player: a ball with a wedge cut out, one geometry per mouth opening
-      mouths: Array.from({ length: MOUTHS }, (_, i) => {
-        const open = 0.04 + (i / (MOUTHS - 1)) * 1.3;
-        return new THREE.SphereGeometry(PAC_R, 28, 18, open / 2, Math.PI * 2 - open);
-      }),
-    };
-  }, []);
+  const cells = useMemo(() => boardCells(maze), [maze]);
+  const geos = useMemo(() => boardGeometries(), []);
   useEffect(
     () => () => {
       for (const g of Object.values(geos)) (Array.isArray(g) ? g : [g]).forEach((x) => x.dispose());
@@ -181,7 +110,7 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
   useFrame((st, dt) => {
     const ex = extractRef.current;
     const g = pacman.game;
-    if (!root.current || !rise.current || !ex) return;
+    if (!root.current || !rise.current) return;
     const out = ex.floor === PAC_FLOOR;
     root.current.visible = out && ex.t > 0.02 && !!g;
     // the banner is HTML and does not follow the group's visibility
@@ -190,7 +119,7 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
     root.current.position.copy(ex.pos);
     root.current.quaternion.copy(ex.quat);
     // the board grows out of the plate as it arrives
-    rise.current.scale.set(1, Math.max(0.001, smooth(ex.t, 0.35, 0.95)), 1);
+    rise.current.scale.set(1, Math.max(0.001, smoothstep(ex.t, 0.35, 0.95)), 1);
 
     // Where the grid's axes point on screen: an arrow key then means what it looks like,
     // however the plate has been turned.
@@ -248,7 +177,7 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
       pac.current.position.set(p.x, PAC_R + 0.04, p.y);
       pac.current.rotation.y = Math.atan2(p.facing.y, -p.facing.x);
       // caught: it spins and shrinks away
-      const gone = g.phase === "caught" ? 1 - smooth(g.phaseT, 0, 1.3) : 0;
+      const gone = g.phase === "caught" ? 1 - smoothstep(g.phaseT, 0, 1.3) : 0;
       if (gone > 0) pac.current.rotation.y += gone * 9;
       pac.current.scale.setScalar(g.phase === "over" ? 0 : Math.max(0.001, 1 - gone));
     }
@@ -369,7 +298,7 @@ export function PacmanBoard({ extractRef, lang }: { extractRef: RefObject<Extrac
 
 /** READY! before a round, GAME OVER after the last life; floats over the board. */
 function Banner({ lang, position, el }: { lang: Lang; position: [number, number, number]; el: RefObject<HTMLDivElement | null> }) {
-  const hud = usePacmanHud();
+  const hud = useGameHud(pacman);
   const t = ui[lang].pacman;
   const text = hud.phase === "ready" ? t.ready : hud.phase === "over" ? t.over : hud.phase === "clear" ? t.cleared : "";
   return (

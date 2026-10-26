@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { Lang } from "@/i18n";
 import { ui } from "@/i18n/ui";
-import type { TypingState } from "../typing/game";
-import { SLOTS } from "../typing/game";
+import { SLOTS, type TypingState } from "../typing/game";
+import { Bar, Footnotes, GameOver, HudHeader, Score } from "./hud";
 
 export function TypingHud({
   game: g,
@@ -44,38 +44,9 @@ export function TypingHud({
           if (v) onKey(v[v.length - 1]);
         }}
       />
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-accent">{t.title}</p>
-        <p className="font-mono text-[11px] text-muted">
-          {t.round} {g.round}
-        </p>
-        {!g.over && (
-          <button onClick={onQuit} className="font-mono text-[11px] text-muted hover:text-accent" aria-label={t.quit} title={t.quit}>
-            ✕
-          </button>
-        )}
-      </div>
-
+      <HudHeader t={t} level={`${t.round} ${g.round}`} onQuit={onQuit} over={g.over} />
       {g.over ? (
-        <>
-          <p className="mt-2 text-xl font-semibold leading-tight">{t.over}</p>
-          <p className="mt-1 text-sm text-muted">{t.overText(g.score, g.round - 1)}</p>
-          {g.newBest ? (
-            <p className="mt-1 font-mono text-xs text-accent">{t.newBest}</p>
-          ) : (
-            <p className="mt-1 font-mono text-xs text-muted">
-              {t.best} {g.best}
-            </p>
-          )}
-          <div className="mt-3 flex gap-2 font-mono text-xs">
-            <button onClick={onAgain} className="glass px-3 py-1.5 rounded-md hover:text-accent">
-              {t.again} ⏎
-            </button>
-            <button onClick={onQuit} className="glass px-3 py-1.5 rounded-md hover:text-accent">
-              {t.quit} esc
-            </button>
-          </div>
-        </>
+        <GameOver t={t} title={t.over} text={t.overText(g.score, g.round - 1)} newBest={g.newBest} best={g.best} onAgain={onAgain} onQuit={onQuit} />
       ) : (
         <>
           <div className="mt-2 flex items-center gap-2">
@@ -95,18 +66,10 @@ export function TypingHud({
                 {i < g.typed ? g.chars[i] : "·"}
               </span>
             ))}
-            <span className="ml-auto text-right font-mono text-sm leading-tight">
-              <span className="block text-2xl font-semibold text-paper">{g.score}</span>
-              <span className="block text-[10px] uppercase tracking-widest text-muted">{t.score}</span>
-            </span>
+            <Score value={g.score} label={t.score} />
           </div>
-          <div className="mt-2 h-2 rounded-full bg-ink-3 overflow-hidden">
-            <div
-              className={"h-full transition-[width] duration-100 " + (urgent ? "bg-red-400" : g.warmup > 0 ? "bg-accent/50 animate-pulse" : "bg-accent")}
-              style={{ width: `${Math.max(0, Math.min(100, frac * 100))}%` }}
-            />
-          </div>
-          <div className="mt-1.5 flex justify-between font-mono text-[10px] text-muted">
+          <Bar fraction={frac} className={"duration-100 " + (urgent ? "bg-red-400" : g.warmup > 0 ? "bg-accent/50 animate-pulse" : "bg-accent")} />
+          <Footnotes>
             <span>
               {t.streak} {g.streak}
             </span>
@@ -114,7 +77,7 @@ export function TypingHud({
               {t.best} {Math.max(g.best, g.score)}
             </span>
             <span className={urgent ? "text-red-400" : ""}>{g.warmup > 0 ? t.ready : `${g.timeLeft.toFixed(1)}s`}</span>
-          </div>
+          </Footnotes>
           <p className="mt-2 text-xs text-muted leading-snug">{t.hint}</p>
         </>
       )}

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
-import { newGame, readBest, steer, step, type PacGame, type Phase } from "./game";
+import { ARROWS, GameStore, useGameKeys } from "../gameStore";
+import { sound, tune, type Note } from "../sound";
+import { newGame, readBest, steer, step, type PacEvent, type PacGame, type Phase } from "./game";
 import { getMaze, mazeText } from "./maze";
-import { sound } from "./sound";
-import { useGamepad } from "../gamepad";
 
-/** What the HUD shows; replaced (never mutated) when one of its values changes. */
+/** What the HUD shows. */
 export type PacHud = {
   active: boolean;
   phase: Phase;
@@ -22,15 +21,22 @@ export type PacHud = {
 
 const IDLE: PacHud = { active: false, phase: "ready", score: 0, lives: 0, level: 1, left: 0, dots: 0, best: 0, newBest: false, muted: false };
 
-/**
- * Runs the floor-13 game. The board steps it once per rendered frame and reads the actors
- * straight from `game`; React only hears about the few numbers the HUD shows.
- * Also reachable in the browser console as primeTower.pacman.
- */
-class Pacman {
-  game: PacGame | null = null;
-  private hud: PacHud = IDLE;
-  private listeners = new Set<() => void>();
+const SOUNDS: Record<Exclude<PacEvent, "dot">, Note[]> = {
+  power: [220, 330, 440, 660].map((f, i) => ({ f, to: f * 1.5, at: i * 0.06, dur: 0.09, gain: 0.35 })),
+  ghost: [{ f: 300, to: 1400, at: 0, dur: 0.28, gain: 0.35 }],
+  caught: Array.from({ length: 9 }, (_, i) => ({ f: 640 * 0.82 ** i, to: 520 * 0.82 ** i, at: i * 0.12, dur: 0.12, type: "sawtooth" as const, gain: 0.3 })),
+  clear: tune([523, 659, 784, 1047, 784, 1047, 1319], 0.11, 0.7),
+  over: tune([392, 330, 262, 196], 0.26),
+};
+
+/** Runs the floor-13 game (see GameStore). Also reachable in the browser console as primeTower.pacman. */
+class Pacman extends GameStore<PacGame, PacHud> {
+  /** waka, waka: every other dot chirps up, the next one down */
+  private waka = false;
+
+  constructor() {
+    super(IDLE);
+  }
 
   start(): this {
     this.game = newGame(getMaze(), readBest());
@@ -53,13 +59,6 @@ class Pacman {
     return this;
   }
 
-  toggleSound(): this {
-    sound.setMuted(!sound.muted);
-    sound.wake();
-    this.publish();
-    return this;
-  }
-
   /** Advance by dt seconds, in slices short enough that nobody skips a cell centre. */
   frame(dt: number): void {
     const g = this.game;
@@ -70,7 +69,7 @@ class Pacman {
       step(g, s);
       left -= s;
     }
-    for (const e of g.events) sound.play(e);
+    for (const e of g.events) this.play(e);
     g.events.length = 0;
     this.publish();
   }
@@ -80,86 +79,37 @@ class Pacman {
     return mazeText();
   }
 
-  subscribe = (fn: () => void) => {
-    this.listeners.add(fn);
-    return () => {
-      this.listeners.delete(fn);
-    };
-  };
+  protected hudOf(g: PacGame): PacHud {
+    return { active: true, phase: g.phase, score: g.score, lives: g.lives, level: g.level, left: g.left, dots: g.maze.dots, best: Math.max(g.best, g.score), newBest: g.newBest, muted: sound.muted };
+  }
 
-  snapshot = (): PacHud => this.hud;
-
-  private publish(): void {
-    const g = this.game;
-    const next: PacHud = g
-      ? { active: true, phase: g.phase, score: g.score, lives: g.lives, level: g.level, left: g.left, dots: g.maze.dots, best: Math.max(g.best, g.score), newBest: g.newBest, muted: sound.muted }
-      : IDLE;
-    const cur = this.hud;
-    const same = (Object.keys(next) as (keyof PacHud)[]).every((k) => cur[k] === next[k]);
-    if (same) return;
-    this.hud = next;
-    for (const fn of this.listeners) fn();
+  private play(event: PacEvent): void {
+    if (event !== "dot") {
+      sound.notes(SOUNDS[event]);
+      return;
+    }
+    this.waka = !this.waka;
+    sound.notes([this.waka ? { f: 330, to: 620, at: 0, dur: 0.07, type: "triangle", gain: 0.6 } : { f: 620, to: 330, at: 0, dur: 0.07, type: "triangle", gain: 0.6 }]);
   }
 }
 
 export type { Pacman };
 export const pacman = new Pacman();
 
-const idle = () => IDLE;
-const isActive = () => pacman.snapshot().active;
-const notActive = () => false;
-
-/** The HUD's view of the game. */
-export function usePacmanHud(): PacHud {
-  return useSyncExternalStore(pacman.subscribe, pacman.snapshot, idle);
-}
-
-/** Whether a game is on; changes only when one starts or stops. */
-export function usePacmanActive(): boolean {
-  return useSyncExternalStore(pacman.subscribe, isActive, notActive);
-}
-
-const KEYS: Record<string, [number, number]> = {
-  ArrowRight: [1, 0],
-  ArrowLeft: [-1, 0],
-  ArrowUp: [0, 1],
-  ArrowDown: [0, -1],
-  d: [1, 0],
-  a: [-1, 0],
-  w: [0, 1],
-  s: [0, -1],
-};
-
 /**
  * Arrow keys or WASD steer, Enter plays again after a game over, Esc quits. A gamepad does the
  * same with the d-pad or stick, A or Start, and Back/Select.
  */
 export function usePacmanKeys(active: boolean, onQuit: () => void): void {
-  useGamepad(active, {
-    onDir: (dx, dy) => pacman.steer(dx, dy),
-    onConfirm: () => pacman.game?.phase === "over" && pacman.start(),
-    onBack: onQuit,
+  useGameKeys(active, {
+    over: () => pacman.game?.phase === "over",
+    restart: () => pacman.start(),
+    quit: onQuit,
+    onKey: (k) => {
+      const v = ARROWS[k];
+      if (v) pacman.steer(v[0], v[1]);
+      return !!v;
+    },
+    pad: { onDir: (dx, dy) => pacman.steer(dx, dy) },
   });
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onQuit();
-        return;
-      }
-      if (e.key === "Enter" && pacman.game?.phase === "over") {
-        e.preventDefault();
-        pacman.start();
-        return;
-      }
-      const v = KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
-      if (!v) return;
-      e.preventDefault(); // the arrows would scroll the page
-      pacman.steer(v[0], v[1]);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, onQuit]);
 }

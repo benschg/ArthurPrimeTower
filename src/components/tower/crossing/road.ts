@@ -5,6 +5,7 @@
  * Everything is in metres in the bridge's own frame: x along the deck from its centre, z across.
  */
 import { bridge } from "../geometry";
+import { clamp, pick, rand } from "../math";
 
 /** Height of the road surface. */
 export const DECK_TOP = bridge.deckHeight + 0.75;
@@ -82,10 +83,6 @@ export type Lane = {
   /** sorted back to front */
   list: Vehicle[];
 };
-
-const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
-const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function newVehicle(tier: number): Vehicle {
   const kind = tier === 2 ? BUS : tier === 1 && Math.random() < 0.25 ? VAN : CAR;

@@ -7,6 +7,9 @@ import { l, type L } from "@/i18n";
  */
 
 export type ProfileBuilding = "Prime Tower" | "Platform" | "Cubus" | "Diagonal" | "MAAG Halle";
+
+/** The buildings in the order the lists show them, the tower first. */
+export const profileBuildings: ProfileBuilding[] = ["Prime Tower", "Platform", "Cubus", "Diagonal", "MAAG Halle"];
 export type ProfileStatus = "current" | "former" | "moved" | "service" | "unconfirmed";
 export type ProfileCategory = "law" | "finance" | "consulting" | "tech" | "realestate" | "energy" | "food" | "retail" | "health" | "culture" | "media";
 

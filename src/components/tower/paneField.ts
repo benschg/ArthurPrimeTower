@@ -1,35 +1,35 @@
-import * as THREE from "three";
 import { FLOORS, perimeterOffsets, stageForFloor } from "./geometry";
+import { clamp } from "./math";
 
-/** Width of one glass pane in metres; must match PANE_W in facadeShader.ts. */
+/** Width of one glass pane in metres; the facade shader is built with it. */
 export const PANE_W = 1.5;
 /** Texture width in panes. The longest perimeter (top stage, ~176 m) needs 118. */
 export const PANE_COLUMNS = 128;
 
 /**
- * One value in 0..1 per pane per floor, kept in a data texture (PANE_COLUMNS x FLOORS, one byte
- * per pane) that the facade shader samples at the pane it is shading. Pane k of floor f is the
- * 1.5 m strip of glass from k*1.5 m to (k+1)*1.5 m along that floor's perimeter, measured from
- * the west corner of the footprint the way the facade UVs are laid out (see perimeterUV in
- * scene/helpers.ts). Changes glide: setters write a target and update(dt) eases the texture
- * toward it. The blinds and the opening windows are each one of these.
+ * One value in 0..1 per pane per floor, kept as bytes (PANE_COLUMNS x FLOORS, one per pane) that
+ * the scene uploads as a data texture for the facade shader to sample at the pane it is shading
+ * (see paneTexture in scene/facadeShader.ts). Pane k of floor f is the 1.5 m strip of glass from
+ * k*1.5 m to (k+1)*1.5 m along that floor's perimeter, measured from the west corner of the
+ * footprint the way the facade UVs are laid out (see perimeterUV in scene/helpers.ts). Changes
+ * glide: setters write a target and update(dt) eases the bytes toward it. The blinds and the
+ * opening windows are each one of these. No three.js here, so the page loads it up front.
  */
 export class PaneField {
-  readonly texture: THREE.DataTexture;
+  /** The bytes the texture is made from; `version` counts their changes. */
+  readonly data = new Uint8Array(PANE_COLUMNS * FLOORS);
+  version = 0;
   /** Ease rate toward the target, per second. Larger = snappier. */
   speed: number;
-  protected readonly data = new Uint8Array(PANE_COLUMNS * FLOORS);
   protected readonly target = new Float32Array(PANE_COLUMNS * FLOORS);
   protected readonly current = new Float32Array(PANE_COLUMNS * FLOORS);
+  /** the bytes lag the eased values */
   protected dirty = true;
+  /** some pane has not reached its target yet */
+  private moving = false;
 
   constructor(speed = 2.5) {
     this.speed = speed;
-    this.texture = new THREE.DataTexture(this.data, PANE_COLUMNS, FLOORS, THREE.RedFormat, THREE.UnsignedByteType);
-    this.texture.magFilter = THREE.NearestFilter;
-    this.texture.minFilter = THREE.NearestFilter;
-    this.texture.generateMipmaps = false;
-    this.texture.needsUpdate = true;
   }
 
   /** Number of panes around floor f. */
@@ -49,7 +49,8 @@ export class PaneField {
 
   set(f: number, pane: number, amount: number): this {
     if (f < 0 || f >= FLOORS || pane < 0 || pane >= PANE_COLUMNS) return this;
-    this.target[f * PANE_COLUMNS + pane] = THREE.MathUtils.clamp(amount, 0, 1);
+    this.target[f * PANE_COLUMNS + pane] = clamp(amount, 0, 1);
+    this.moving = true;
     return this;
   }
 
@@ -92,6 +93,7 @@ export class PaneField {
 
   restore(snap: Float32Array): this {
     this.target.set(snap);
+    this.moving = true;
     return this;
   }
 
@@ -102,31 +104,28 @@ export class PaneField {
     return this;
   }
 
-  /** Ease toward the target; call once per frame. Returns true when the texture changed. */
+  /** Ease toward the target; call once per frame. Returns true when the bytes changed. */
   update(dt: number): boolean {
-    const k = 1 - Math.exp(-this.speed * Math.max(dt, 0));
     let changed = this.dirty;
-    for (let i = 0; i < this.current.length; i++) {
-      const c = this.current[i];
-      const t = this.target[i];
-      if (c === t) continue;
-      const nc = Math.abs(t - c) < 0.003 ? t : c + (t - c) * k;
-      this.current[i] = nc;
-      changed = true;
+    if (this.moving) {
+      const k = 1 - Math.exp(-this.speed * Math.max(dt, 0));
+      let still = false;
+      for (let i = 0; i < this.current.length; i++) {
+        const c = this.current[i];
+        const t = this.target[i];
+        if (c === t) continue;
+        const nc = Math.abs(t - c) < 0.003 ? t : c + (t - c) * k;
+        this.current[i] = nc;
+        if (nc !== t) still = true;
+        changed = true;
+      }
+      // everything has arrived: skip the scan until a setter moves a target again
+      this.moving = still;
     }
     if (!changed) return false;
     for (let i = 0; i < this.current.length; i++) this.data[i] = Math.round(this.current[i] * 255);
-    this.texture.needsUpdate = true;
+    this.version++;
     this.dirty = false;
     return true;
   }
-}
-
-/** Deterministic random numbers in [0, 1) from a seed (linear congruential). */
-export function seededRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
 }

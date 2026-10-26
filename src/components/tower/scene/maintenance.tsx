@@ -1,41 +1,28 @@
 import * as THREE from "three";
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { TOWER_HEIGHT, floorElevation, EDGE_SE, edgeOutwardNormal, stages, type Pt } from "../geometry";
-import { hash } from "./helpers";
-import type { UnitProps } from "./types";
+import { TOWER_HEIGHT, floorElevation, EDGE_SE, edgeFrame, stages } from "../geometry";
+import { canvasTexture, hash } from "./helpers";
+import { CLEAN_SECONDS, type UnitProps } from "./types";
 
-export const GAME_SECONDS = 60;
+const CLEAN_PX = 6; // dirt canvas pixels per metre
 
-export const CLEAN_PX = 6; // dirt canvas pixels per metre
-
-/** Frame of the Hardbruecke facade of the top stage: origin a, unit vector along, outward normal. */
-export function useFacadeFrame() {
-  const top = stages[stages.length - 1].polygon;
-  return useMemo(() => {
-    const a = top[EDGE_SE];
-    const b = top[(EDGE_SE + 1) % top.length];
-    const ex = b[0] - a[0];
-    const ey = b[1] - a[1];
-    const len = Math.hypot(ex, ey);
-    const along: Pt = [ex / len, ey / len];
-    const out = edgeOutwardNormal(top, EDGE_SE);
-    const yaw = Math.atan2(ey, ex); // rotation.y so a box's local x runs along the facade
-    const lowY = floorElevation(17) + 0.4; // the facade steps in below floor 17
-    const highY = TOWER_HEIGHT - 0.3;
-    return { a, along, out, len, yaw, lowY, highY };
-  }, [top]);
-}
+/** Frame of the Hardbruecke facade of the top stage, where the cradle works: origin a, unit vector along, outward normal. */
+export const CLEAN_FACADE = (() => {
+  const { a, along, out, len } = edgeFrame(stages[stages.length - 1].polygon, EDGE_SE);
+  const yaw = Math.atan2(along[1], along[0]); // rotation.y so a box's local x runs along the facade
+  const lowY = floorElevation(17) + 0.4; // the facade steps in below floor 17
+  const highY = TOWER_HEIGHT - 0.3;
+  return { a, along, out, len, yaw, lowY, highY };
+})();
 
 /** Dirt layer: a canvas the squeegee clears; progress is tracked on a 1 m grid. */
-export function useDirt(len: number, height: number) {
+function useDirt(len: number, height: number) {
   return useMemo(() => {
     const w = Math.ceil(len * CLEAN_PX);
     const h = Math.ceil(height * CLEAN_PX);
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext("2d")!;
+    const tex = canvasTexture(w, h, () => {});
+    const ctx = (tex.image as HTMLCanvasElement).getContext("2d")!;
     const paint = () => {
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = "rgba(70, 58, 40, 0.55)";
@@ -61,8 +48,6 @@ export function useDirt(len: number, height: number) {
       }
     };
     paint();
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
     const cols = Math.ceil(len);
     const rows = Math.ceil(height);
     const cleaned = new Uint8Array(cols * rows);
@@ -98,9 +83,8 @@ export function useDirt(len: number, height: number) {
  * Hardbruecke facade, a jib reaching over the parapet, two cables and a cradle. Idle, it
  * slowly travels the upper facade; clicked, it becomes the player's squeegee.
  */
-export function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitProps) {
-  const frame = useFacadeFrame();
-  const { a, along, out, len, yaw, lowY, highY } = frame;
+export const MaintenanceUnit = memo(function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: UnitProps) {
+  const { a, along, out, len, yaw, lowY, highY } = CLEAN_FACADE;
   const H = highY - lowY;
   const dirt = useDirt(len, H);
 
@@ -163,7 +147,7 @@ export function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: 
       if (!game.current.done && now - game.current.lastReport > 200) {
         game.current.lastReport = now;
         const progress = Math.min(1, game.current.cleanedCount / (dirt.cols * dirt.rows) / 0.97);
-        const secondsLeft = Math.max(0, GAME_SECONDS - (now - game.current.started) / 1000);
+        const secondsLeft = Math.max(0, CLEAN_SECONDS - (now - game.current.started) / 1000);
         if (progress >= 0.99) game.current.done = true; // freeze the clock and the final score
         onProgress(progress, secondsLeft);
       }
@@ -310,4 +294,4 @@ export function MaintenanceUnit({ cleaning, onStart, onProgress, onHoverUnit }: 
       </mesh>
     </group>
   );
-}
+});

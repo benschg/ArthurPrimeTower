@@ -3,7 +3,9 @@
  * then back again. Every crossing brings more traffic. Rules only: the scene draws the
  * frog and the road, the store runs the game.
  */
+import { bestScore } from "@/lib/storage";
 import { road, type Flow } from "./road";
+import { smoothstep } from "../math";
 
 /** z of each row the frog can sit on, near footway first: footway, three lanes, median, three lanes, footway. */
 export const ROWS = [12.6, 10.2, 6.6, 3, 0, -3, -6.6, -10.2, -12.6];
@@ -15,7 +17,6 @@ export const LIVES = 3;
 
 const HOP = 0.12; // seconds per hop
 const RADIUS = 0.45; // the frog, for being run over
-const BEST_KEY = "prime-tower-crossing-best";
 
 export type CrossPhase = "ready" | "play" | "hit" | "over";
 export type CrossEvent = "hop" | "hit" | "late" | "cross" | "over";
@@ -51,21 +52,8 @@ export type CrossGame = {
   events: CrossEvent[];
 };
 
-export function readBest(): number {
-  try {
-    return Number(window.localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writeBest(v: number) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(v));
-  } catch {
-    /* storage unavailable */
-  }
-}
+const bestStore = bestScore("prime-tower-crossing-best");
+export const readBest = bestStore.read;
 
 /** Traffic for a level (1 is the first crossing): denser, closer and a little faster each time. */
 export function rushFlow(level: number): Flow {
@@ -138,7 +126,7 @@ function knock(g: CrossGame, event: "hit" | "late"): void {
 }
 
 function place(g: CrossGame): void {
-  const t = g.hop * g.hop * (3 - 2 * g.hop);
+  const t = smoothstep(g.hop);
   g.x = (g.fromCol + (g.col - g.fromCol) * t) * STEP;
   g.z = ROWS[g.fromRow] + (ROWS[g.row] - ROWS[g.fromRow]) * t;
   g.lift = Math.sin(Math.PI * g.hop) * 0.7;
@@ -156,7 +144,7 @@ export function step(g: CrossGame, dt: number): void {
         if (g.crossings > g.best) {
           g.best = g.crossings;
           g.newBest = true;
-          writeBest(g.best);
+          bestStore.write(g.best);
         }
         return;
       }

@@ -5,6 +5,7 @@
  * Pure simulation on the maze grid (positions in cells); the board in scene/pacman.tsx
  * draws it and the store in store.ts runs it.
  */
+import { bestScore } from "@/lib/storage";
 import { idx, isLane, laneDistances, type Cell, type Maze } from "./maze";
 
 export type Dir = { x: number; y: number };
@@ -84,23 +85,8 @@ export const frightTime = (level: number) => Math.max(2.5, 7 - 0.8 * (level - 1)
 /** Seconds before ghost i leaves its lift; they come one after another, sooner on later levels. */
 const releaseDelay = (i: number, level: number) => 0.6 + i * Math.max(1.6, 3.6 - 0.4 * (level - 1));
 
-const BEST_KEY = "prime-tower-pacman-best";
-
-export function readBest(): number {
-  try {
-    return Number(window.localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writeBest(v: number) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(v));
-  } catch {
-    /* storage unavailable */
-  }
-}
+const bestStore = bestScore("prime-tower-pacman-best");
+export const readBest = bestStore.read;
 
 function placeActors(g: PacGame): void {
   const m = g.maze;
@@ -403,7 +389,7 @@ export function step(g: PacGame, dt: number): void {
         g.newBest = g.score > g.best;
         if (g.newBest) {
           g.best = g.score;
-          writeBest(g.best);
+          bestStore.write(g.best);
         }
         return;
       }
