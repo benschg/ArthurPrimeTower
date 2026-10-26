@@ -84,7 +84,8 @@ export function LocationZoom({ lang }: { lang: Lang }) {
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setPxWidth(e.contentRect.width));
+    // a zero width (mid-layout) would make every on-screen size infinite
+    const ro = new ResizeObserver(([e]) => e.contentRect.width > 0 && setPxWidth(e.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
